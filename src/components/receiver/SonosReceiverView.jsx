@@ -3,6 +3,7 @@ import { ToggleSwitch } from './ToggleSwitch.jsx';
 import { ReceiverDisplay } from './ReceiverDisplay.jsx';
 import { TransportControls } from './TransportControls.jsx';
 import { VolumeKnob } from './VolumeKnob.jsx';
+import { MediaStack } from './MediaStack.jsx';
 import { useSonos } from '../../hooks/useSonos.js';
 
 export function SonosReceiverView() {
@@ -20,90 +21,105 @@ export function SonosReceiverView() {
 
   return (
     <main className="receiver-page">
-      <div className="receiver-environment">
-        <div className="wood-casing">
-          <div className="aluminum-faceplate">
-            <div className="screw tl" />
-            <div className="screw tr" />
-            <div className="screw bl" />
-            <div className="screw br" />
+      <div className="receiver-rack">
+        <div className="receiver-environment">
+          <div className="wood-casing">
+            <div className="aluminum-faceplate">
+              <div className="screw tl" />
+              <div className="screw tr" />
+              <div className="screw bl" />
+              <div className="screw br" />
 
-            <section className="section-power">
-              <div className="power-brand-cluster">
-                <div className="left-power-group">
-                  <ToggleSwitch
-                    label="Power"
-                    active={powerOn}
-                    onToggle={() => {
-                      if (!sonos.selectedRoom && roomLabels.length > 0) {
-                        const room = roomLabels[0].key;
-                        sonos.setSelectedRoom(room);
-                        sonos.playRoom(room);
-                        return;
-                      }
-                      if (isPlaying) {
-                        sonos.pause();
-                      } else {
-                        sonos.play();
-                      }
-                    }}
-                  />
-                  <div className={`jewel-light ${sonos.bridgeReachable ? 'on' : 'off'}`} />
-                </div>
-
-                <div className="brand-block">
-                  <div className="brand-name">SONOS</div>
-                  <div className="model-name">MODEL S-1600</div>
-                </div>
-              </div>
-            </section>
-
-            <section className="section-display">
-              <ReceiverDisplay
-                loading={sonos.loading}
-                error={sonos.error}
-                currentTrack={sonos.playerState?.currentTrack}
-                playbackState={sonos.playerState?.playbackState}
-                selectedRoom={sonos.selectedRoom}
-              />
-
-            </section>
-
-            <section className="section-controls">
-              <VolumeKnob value={sonos.volume} onChange={sonos.setVolume} />
-              <TransportControls
-                isPlaying={isPlaying}
-                onPrevious={sonos.prev}
-                onPlayPause={isPlaying ? sonos.pause : sonos.play}
-                onNext={sonos.next}
-              />
-            </section>
-
-            <section className="section-room-toggles">
-              <div className="rooms-row">
-                {roomLabels.map((room) => (
-                  <div key={room.key} className="room-toggle-wrap">
+              <section className="section-power">
+                <div className="power-brand-cluster">
+                  <div className="left-power-group">
                     <ToggleSwitch
-                      label={room.label}
-                      active={sonos.currentGroupRooms.includes(room.key)}
+                      label="Power"
+                      active={powerOn}
                       onToggle={() => {
-                        if (sonos.currentGroupRooms.includes(room.key)) {
-                          sonos.leaveRoomFromGroup(room.key);
+                        if (!sonos.selectedRoom && roomLabels.length > 0) {
+                          const room = roomLabels[0].key;
+                          sonos.setSelectedRoom(room);
+                          sonos.playRoom(room);
+                          return;
+                        }
+                        if (isPlaying) {
+                          sonos.pause();
                         } else {
-                          sonos.joinRoomToCurrentGroup(room.key);
+                          sonos.play();
                         }
                       }}
-                      onSecondaryClick={() => sonos.setSelectedRoom(room.key)}
-                      secondaryLabel="Solo"
-                      secondaryActive={sonos.selectedRoom === room.key}
-                      compact
                     />
+                    <div className={`jewel-light ${sonos.bridgeReachable ? 'on' : 'off'}`} />
                   </div>
-                ))}
-              </div>
-            </section>
+
+                  <div className="brand-block">
+                    <div className="brand-name">SONOS</div>
+                    <div className="model-name">MODEL S-1600</div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="section-display">
+                <ReceiverDisplay
+                  loading={sonos.loading}
+                  error={sonos.error}
+                  currentTrack={sonos.playerState?.currentTrack}
+                  playbackState={sonos.playerState?.playbackState}
+                  selectedRoom={sonos.selectedRoom}
+                />
+              </section>
+
+              <section className="section-controls">
+                <VolumeKnob value={sonos.volume} onChange={sonos.setVolume} />
+                <TransportControls
+                  isPlaying={isPlaying}
+                  onPrevious={sonos.prev}
+                  onPlayPause={isPlaying ? sonos.pause : sonos.play}
+                  onNext={sonos.next}
+                />
+              </section>
+
+              <section className="section-room-toggles">
+                <div className="rooms-row">
+                  {roomLabels.map((room) => (
+                    <div key={room.key} className="room-toggle-wrap">
+                      <ToggleSwitch
+                        label={room.label}
+                        active={sonos.currentGroupRooms.includes(room.key)}
+                        onToggle={() => {
+                          if (sonos.currentGroupRooms.includes(room.key)) {
+                            sonos.leaveRoomFromGroup(room.key);
+                          } else {
+                            sonos.joinRoomToCurrentGroup(room.key);
+                          }
+                        }}
+                        onSecondaryClick={() => sonos.setSelectedRoom(room.key)}
+                        secondaryLabel="Solo"
+                        secondaryActive={sonos.selectedRoom === room.key}
+                        compact
+                      />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
           </div>
         </div>
+
+        <MediaStack
+          selectedRoom={sonos.selectedRoom}
+          favorites={sonos.favorites}
+          playlists={sonos.playlists}
+          queue={sonos.queue}
+          spotifyLibrary={sonos.spotifyLibrary}
+          loading={sonos.loading}
+          playNextSupported={sonos.playNextSupported}
+          onPlayFavorite={sonos.playFavorite}
+          onPlayPlaylist={sonos.playPlaylist}
+          onPlayFavoriteNext={sonos.playFavoriteNext}
+          onPlayPlaylistNext={sonos.playPlaylistNext}
+        />
       </div>
     </main>
   );

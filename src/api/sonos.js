@@ -80,6 +80,23 @@ async function apiFetch(path) {
   return response.json();
 }
 
+async function apiFetchAny(path) {
+  if (FORCE_MOCK) {
+    throw new Error('Mock mode enabled');
+  }
+  const response = await fetch(`${BASE_URL}${path}`);
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 // Unlike apiFetch, mutations never fall back to mock — errors are re-thrown so
 // the caller can surface them to the user.
 async function apiMutation(path) {
@@ -91,6 +108,19 @@ async function apiMutation(path) {
     throw new Error(`API error: ${response.status}`);
   }
   return response.json();
+}
+
+async function apiMutationTry(paths) {
+  let lastError = null;
+  for (const path of paths) {
+    try {
+      const result = await apiMutation(path);
+      return { ok: true, path, result };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('No supported mutation endpoint');
 }
 
 function withResolvedAlbumArt(track) {
@@ -158,6 +188,15 @@ export function playFavorite(room, name) {
   return apiMutation(`/${encodeURIComponent(room)}/favorite/${encodeURIComponent(name)}`);
 }
 
+export function playFavoriteNext(room, name) {
+  const encodedRoom = encodeURIComponent(room);
+  const encodedName = encodeURIComponent(name);
+  return apiMutationTry([
+    `/${encodedRoom}/favorite/${encodedName}/next`,
+    `/${encodedRoom}/favorite/${encodedName}?action=next`,
+  ]);
+}
+
 export async function getPlaylists(room) {
   try {
     return await apiFetch(`/${encodeURIComponent(room)}/playlists`);
@@ -168,6 +207,15 @@ export async function getPlaylists(room) {
 
 export function playPlaylist(room, name) {
   return apiMutation(`/${encodeURIComponent(room)}/playlist/${encodeURIComponent(name)}`);
+}
+
+export function playPlaylistNext(room, name) {
+  const encodedRoom = encodeURIComponent(room);
+  const encodedName = encodeURIComponent(name);
+  return apiMutationTry([
+    `/${encodedRoom}/playlist/${encodedName}/next`,
+    `/${encodedRoom}/playlist/${encodedName}?action=next`,
+  ]);
 }
 
 export function toggleShuffle(room) {
@@ -184,6 +232,22 @@ export function joinRoom(room, targetRoom) {
 
 export function leaveRoom(room) {
   return apiMutation(`/${encodeURIComponent(room)}/leave`);
+}
+
+export async function getQueue(room) {
+  const encodedRoom = encodeURIComponent(room);
+  const candidates = [
+    `/${encodedRoom}/queue`,
+    `/${encodedRoom}/state/queue`,
+  ];
+  for (const endpoint of candidates) {
+    try {
+      return await apiFetchAny(endpoint);
+    } catch {
+      // try next endpoint
+    }
+  }
+  return [];
 }
 
 export async function isBridgeReachable() {

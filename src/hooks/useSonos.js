@@ -8,6 +8,9 @@ export function useSonos() {
   const [volume, setVolumeState] = useState(50);
   const [favorites, setFavorites] = useState([]);
   const [playlists, setPlaylists] = useState([]);
+  const [queue, setQueue] = useState([]);
+  const [playNextSupported, setPlayNextSupported] = useState(true);
+  const [spotifyLibrary, setSpotifyLibrary] = useState([]);
   const [bridgeReachable, setBridgeReachable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -73,6 +76,14 @@ export function useSonos() {
     }
   }, []);
 
+  const normalizeQueue = useCallback((rawQueue) => {
+    if (Array.isArray(rawQueue)) return rawQueue;
+    if (Array.isArray(rawQueue?.items)) return rawQueue.items;
+    if (Array.isArray(rawQueue?.queue)) return rawQueue.queue;
+    if (Array.isArray(rawQueue?.tracks)) return rawQueue.tracks;
+    return [];
+  }, []);
+
   // Poll player state every 2 seconds when a room is selected
   useEffect(() => {
     if (!selectedRoom) return;
@@ -127,6 +138,62 @@ export function useSonos() {
     fetchContent();
     return () => { cancelled = true; };
   }, [selectedRoom]);
+
+  // Fetch queue when room changes and poll periodically.
+  useEffect(() => {
+    if (!selectedRoom) return;
+    let cancelled = false;
+
+    async function fetchQueue() {
+      try {
+        const queueData = await api.getQueue(selectedRoom);
+        if (!cancelled) {
+          setQueue(normalizeQueue(queueData));
+        }
+      } catch {
+        if (!cancelled) {
+          setQueue([]);
+        }
+      }
+    }
+
+    fetchQueue();
+    const interval = setInterval(fetchQueue, 8000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [selectedRoom, normalizeQueue]);
+
+  // Optional Spotify library feed (supports integrating output from your Rdio project).
+  useEffect(() => {
+    const endpoint = import.meta.env.VITE_SPOTIFY_LIBRARY_URL?.trim();
+    if (!endpoint) return;
+    let cancelled = false;
+
+    async function fetchSpotifyLibrary() {
+      try {
+        const response = await fetch(endpoint);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!cancelled) {
+          setSpotifyLibrary(Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setSpotifyLibrary([]);
+        }
+      }
+    }
+
+    fetchSpotifyLibrary();
+    const interval = setInterval(fetchSpotifyLibrary, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Control functions
   const playRoom = useCallback(async (roomName) => {
@@ -221,6 +288,32 @@ export function useSonos() {
     }
   }, [selectedRoom]);
 
+  const playFavoriteNext = useCallback(async (name) => {
+    if (!selectedRoom) return false;
+    try {
+      await api.playFavoriteNext(selectedRoom, name);
+      setPlayNextSupported(true);
+      return true;
+    } catch {
+      setPlayNextSupported(false);
+      setError('Play-next not supported by current Sonos bridge endpoint');
+      return false;
+    }
+  }, [selectedRoom]);
+
+  const playPlaylistNext = useCallback(async (name) => {
+    if (!selectedRoom) return false;
+    try {
+      await api.playPlaylistNext(selectedRoom, name);
+      setPlayNextSupported(true);
+      return true;
+    } catch {
+      setPlayNextSupported(false);
+      setError('Play-next not supported by current Sonos bridge endpoint');
+      return false;
+    }
+  }, [selectedRoom]);
+
   const currentZone = selectedRoom ? findZoneForRoom(selectedRoom) : null;
   const currentGroupRooms = currentZone
     ? getRoomNamesFromZone(currentZone)
@@ -287,6 +380,9 @@ export function useSonos() {
     setVolume,
     favorites,
     playlists,
+    queue,
+    spotifyLibrary,
+    playNextSupported,
     loading,
     error,
     bridgeReachable,
@@ -304,5 +400,7 @@ export function useSonos() {
     leaveRoomFromGroup,
     playFavorite,
     playPlaylist,
+    playFavoriteNext,
+    playPlaylistNext,
   };
 }
