@@ -112,7 +112,6 @@ export function SonosReceiverView() {
           favorites={sonos.favorites}
           playlists={sonos.playlists}
           queue={sonos.queue}
-          spotifyLibrary={sonos.spotifyLibrary}
           loading={sonos.loading}
           playNextSupported={sonos.playNextSupported}
           onPlayFavorite={sonos.playFavorite}

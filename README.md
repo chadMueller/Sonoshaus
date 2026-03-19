@@ -22,9 +22,6 @@ Optional:
 # Force fullscreen after first interaction + auto-reload after idle period
 VITE_KIOSK_FULLSCREEN=true
 VITE_KIOSK_IDLE_MINUTES=45
-
-# Optional external Spotify feed (for example from your Rdio project)
-VITE_SPOTIFY_LIBRARY_URL=http://localhost:3001/api/spotify/library
 ```
 
 ## 2) Run locally
@@ -42,7 +39,6 @@ The lower stack supports:
 - Favorites
 - Playlists
 - Queue (if your bridge exposes queue endpoints)
-- Spotify (appears only if `VITE_SPOTIFY_LIBRARY_URL` returns items)
 
 `Play next` is enabled for Favorites/Playlists and automatically degrades if unsupported by your current bridge endpoint.
 

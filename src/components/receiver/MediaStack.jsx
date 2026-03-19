@@ -10,7 +10,7 @@ function sourceToItems(source) {
       if (item && typeof item === 'object') {
         return {
           title: item.title || item.name || item.uri || 'Untitled',
-          subtitle: item.artist || item.album || item.containerType || '',
+          subtitle: item.artist || item.artistName || item.album || item.containerType || '',
           raw: item,
         };
       }
@@ -24,7 +24,6 @@ export function MediaStack({
   favorites,
   playlists,
   queue,
-  spotifyLibrary,
   loading,
   playNextSupported,
   onPlayFavorite,
@@ -38,19 +37,14 @@ export function MediaStack({
   const favoriteItems = useMemo(() => sourceToItems(favorites), [favorites]);
   const playlistItems = useMemo(() => sourceToItems(playlists), [playlists]);
   const queueItems = useMemo(() => sourceToItems(queue), [queue]);
-  const spotifyItems = useMemo(() => sourceToItems(spotifyLibrary), [spotifyLibrary]);
-
-  const tabs = useMemo(() => {
-    const baseTabs = [
+  const tabs = useMemo(
+    () => [
       { key: 'favorites', label: 'Favorites' },
       { key: 'playlists', label: 'Playlists' },
       { key: 'queue', label: 'Queue' },
-    ];
-    if (spotifyItems.length > 0) {
-      baseTabs.push({ key: 'spotify', label: 'Spotify' });
-    }
-    return baseTabs;
-  }, [spotifyItems.length]);
+    ],
+    [],
+  );
 
   const activeItems = useMemo(() => {
     switch (activeTab) {
@@ -58,13 +52,11 @@ export function MediaStack({
         return playlistItems;
       case 'queue':
         return queueItems;
-      case 'spotify':
-        return spotifyItems;
       case 'favorites':
       default:
         return favoriteItems;
     }
-  }, [activeTab, favoriteItems, playlistItems, queueItems, spotifyItems]);
+  }, [activeTab, favoriteItems, playlistItems, queueItems]);
 
   const filteredItems = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -77,11 +69,6 @@ export function MediaStack({
   const handlePlay = (item) => {
     const value = item.title;
     if (activeTab === 'favorites') {
-      onPlayFavorite(value);
-      return;
-    }
-    if (activeTab === 'spotify') {
-      // Spotify feed currently routes through Sonos favorites/playlists APIs.
       onPlayFavorite(value);
       return;
     }

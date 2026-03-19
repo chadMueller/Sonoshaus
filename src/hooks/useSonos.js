@@ -10,7 +10,6 @@ export function useSonos() {
   const [playlists, setPlaylists] = useState([]);
   const [queue, setQueue] = useState([]);
   const [playNextSupported, setPlayNextSupported] = useState(true);
-  const [spotifyLibrary, setSpotifyLibrary] = useState([]);
   const [bridgeReachable, setBridgeReachable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -165,35 +164,6 @@ export function useSonos() {
       clearInterval(interval);
     };
   }, [selectedRoom, normalizeQueue]);
-
-  // Optional Spotify library feed (supports integrating output from your Rdio project).
-  useEffect(() => {
-    const endpoint = import.meta.env.VITE_SPOTIFY_LIBRARY_URL?.trim();
-    if (!endpoint) return;
-    let cancelled = false;
-
-    async function fetchSpotifyLibrary() {
-      try {
-        const response = await fetch(endpoint);
-        if (!response.ok) return;
-        const data = await response.json();
-        if (!cancelled) {
-          setSpotifyLibrary(Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []);
-        }
-      } catch {
-        if (!cancelled) {
-          setSpotifyLibrary([]);
-        }
-      }
-    }
-
-    fetchSpotifyLibrary();
-    const interval = setInterval(fetchSpotifyLibrary, 30000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
 
   // Control functions
   const playRoom = useCallback(async (roomName) => {
@@ -381,7 +351,6 @@ export function useSonos() {
     favorites,
     playlists,
     queue,
-    spotifyLibrary,
     playNextSupported,
     loading,
     error,
