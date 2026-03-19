@@ -1,0 +1,109 @@
+import { useMemo } from 'react';
+import { ToggleSwitch } from './ToggleSwitch.jsx';
+import { ReceiverDisplay } from './ReceiverDisplay.jsx';
+import { TransportControls } from './TransportControls.jsx';
+import { VolumeKnob } from './VolumeKnob.jsx';
+import { useSonos } from '../../hooks/useSonos.js';
+
+export function SonosReceiverView() {
+  const sonos = useSonos();
+  const isPlaying = sonos.playerState?.playbackState === 'PLAYING';
+  const powerOn = !!sonos.selectedRoom && isPlaying;
+
+  const roomLabels = useMemo(() => {
+    const names =
+      sonos.roomNames.length > 0
+        ? sonos.roomNames
+        : ['Living Room', 'Kitchen', 'Office', 'Bedroom', 'Patio', 'Den', 'Dining', 'Gym'];
+    return names.map((name) => ({ key: name, label: name }));
+  }, [sonos.roomNames]);
+
+  return (
+    <main className="receiver-page">
+      <div className="receiver-environment">
+        <div className="wood-casing">
+          <div className="aluminum-faceplate">
+            <div className="screw tl" />
+            <div className="screw tr" />
+            <div className="screw bl" />
+            <div className="screw br" />
+
+            <section className="section-power">
+              <div className="power-brand-cluster">
+                <div className="left-power-group">
+                  <ToggleSwitch
+                    label="Power"
+                    active={powerOn}
+                    onToggle={() => {
+                      if (!sonos.selectedRoom && roomLabels.length > 0) {
+                        sonos.setSelectedRoom(roomLabels[0].key);
+                        sonos.play();
+                        return;
+                      }
+                      if (isPlaying) {
+                        sonos.pause();
+                      } else {
+                        sonos.play();
+                      }
+                    }}
+                  />
+                  <div className={`jewel-light ${sonos.bridgeReachable ? 'on' : 'off'}`} />
+                </div>
+
+                <div className="brand-block">
+                  <div className="brand-name">SONOS</div>
+                  <div className="model-name">MODEL S-1600</div>
+                </div>
+              </div>
+            </section>
+
+            <section className="section-display">
+              <ReceiverDisplay
+                loading={sonos.loading}
+                error={sonos.error}
+                currentTrack={sonos.playerState?.currentTrack}
+                playbackState={sonos.playerState?.playbackState}
+                selectedRoom={sonos.selectedRoom}
+              />
+
+            </section>
+
+            <section className="section-controls">
+              <VolumeKnob value={sonos.volume} onChange={sonos.setVolume} />
+              <TransportControls
+                isPlaying={isPlaying}
+                onPrevious={sonos.prev}
+                onPlayPause={isPlaying ? sonos.pause : sonos.play}
+                onNext={sonos.next}
+              />
+            </section>
+
+            <section className="section-room-toggles">
+              <div className="rooms-row">
+                {roomLabels.map((room) => (
+                  <div key={room.key} className="room-toggle-wrap">
+                    <ToggleSwitch
+                      label={room.label}
+                      active={sonos.currentGroupRooms.includes(room.key)}
+                      onToggle={() => {
+                        if (sonos.currentGroupRooms.includes(room.key)) {
+                          sonos.leaveRoomFromGroup(room.key);
+                        } else {
+                          sonos.joinRoomToCurrentGroup(room.key);
+                        }
+                      }}
+                      onSecondaryClick={() => sonos.setSelectedRoom(room.key)}
+                      secondaryLabel="Solo"
+                      secondaryActive={sonos.selectedRoom === room.key}
+                      compact
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
