@@ -36,8 +36,9 @@ export function SonosReceiverView() {
                     active={powerOn}
                     onToggle={() => {
                       if (!sonos.selectedRoom && roomLabels.length > 0) {
-                        sonos.setSelectedRoom(roomLabels[0].key);
-                        sonos.play();
+                        const room = roomLabels[0].key;
+                        sonos.setSelectedRoom(room);
+                        sonos.playRoom(room);
                         return;
                       }
                       if (isPlaying) {

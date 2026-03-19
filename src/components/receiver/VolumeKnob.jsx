@@ -63,6 +63,16 @@ export function VolumeKnob({ value = 50, onChange }) {
           event.currentTarget.setPointerCapture?.(event.pointerId);
           setDragging(true);
         }}
+        onKeyDown={(event) => {
+          const step = event.shiftKey ? 10 : 5;
+          if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
+            event.preventDefault();
+            if (onChange) onChange(clamp(value + step, 0, 100));
+          } else if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
+            event.preventDefault();
+            if (onChange) onChange(clamp(value - step, 0, 100));
+          }
+        }}
         role="slider"
         aria-label="Master Volume"
         aria-valuemin={0}

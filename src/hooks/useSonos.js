@@ -67,26 +67,6 @@ export function useSonos() {
     };
   }, [refreshZones]);
 
-  // Poll bridge health to drive receiver status light.
-  useEffect(() => {
-    let cancelled = false;
-
-    async function checkBridge() {
-      const reachable = await api.isBridgeReachable();
-      if (!cancelled) {
-        setBridgeReachable(reachable);
-      }
-    }
-
-    checkBridge();
-    const interval = setInterval(checkBridge, 8000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
-
   useEffect(() => () => {
     if (volumeCommitTimerRef.current) {
       clearTimeout(volumeCommitTimerRef.current);
@@ -149,24 +129,48 @@ export function useSonos() {
   }, [selectedRoom]);
 
   // Control functions
+  const playRoom = useCallback(async (roomName) => {
+    try {
+      await api.play(roomName);
+    } catch {
+      setError('Playback command failed');
+    }
+  }, []);
+
   const play = useCallback(async () => {
     if (!selectedRoom) return;
-    await api.play(selectedRoom);
+    try {
+      await api.play(selectedRoom);
+    } catch {
+      setError('Playback command failed');
+    }
   }, [selectedRoom]);
 
   const pause = useCallback(async () => {
     if (!selectedRoom) return;
-    await api.pause(selectedRoom);
+    try {
+      await api.pause(selectedRoom);
+    } catch {
+      setError('Pause command failed');
+    }
   }, [selectedRoom]);
 
   const next = useCallback(async () => {
     if (!selectedRoom) return;
-    await api.next(selectedRoom);
+    try {
+      await api.next(selectedRoom);
+    } catch {
+      setError('Skip command failed');
+    }
   }, [selectedRoom]);
 
   const prev = useCallback(async () => {
     if (!selectedRoom) return;
-    await api.previous(selectedRoom);
+    try {
+      await api.previous(selectedRoom);
+    } catch {
+      setError('Skip command failed');
+    }
   }, [selectedRoom]);
 
   const setVolume = useCallback(async (level) => {
@@ -183,22 +187,38 @@ export function useSonos() {
 
   const toggleShuffle = useCallback(async () => {
     if (!selectedRoom) return;
-    await api.toggleShuffle(selectedRoom);
+    try {
+      await api.toggleShuffle(selectedRoom);
+    } catch {
+      setError('Shuffle command failed');
+    }
   }, [selectedRoom]);
 
   const toggleRepeat = useCallback(async () => {
     if (!selectedRoom) return;
-    await api.toggleRepeat(selectedRoom);
+    try {
+      await api.toggleRepeat(selectedRoom);
+    } catch {
+      setError('Repeat command failed');
+    }
   }, [selectedRoom]);
 
   const playFavorite = useCallback(async (name) => {
     if (!selectedRoom) return;
-    await api.playFavorite(selectedRoom, name);
+    try {
+      await api.playFavorite(selectedRoom, name);
+    } catch {
+      setError('Failed to play favorite');
+    }
   }, [selectedRoom]);
 
   const playPlaylist = useCallback(async (name) => {
     if (!selectedRoom) return;
-    await api.playPlaylist(selectedRoom, name);
+    try {
+      await api.playPlaylist(selectedRoom, name);
+    } catch {
+      setError('Failed to play playlist');
+    }
   }, [selectedRoom]);
 
   const currentZone = selectedRoom ? findZoneForRoom(selectedRoom) : null;
@@ -216,18 +236,26 @@ export function useSonos() {
         setSelectedRoom(roomName);
         return;
       }
-      await api.joinRoom(roomName, target);
-      await refreshZones({ silent: true });
+      try {
+        await api.joinRoom(roomName, target);
+        await refreshZones({ silent: true });
+      } catch {
+        setError('Failed to join room to group');
+      }
     },
     [currentCoordinator, refreshZones],
   );
 
   const leaveRoomFromGroup = useCallback(
     async (roomName) => {
-      await api.leaveRoom(roomName);
-      await refreshZones({ silent: true });
-      if (selectedRoomRef.current === roomName) {
-        setSelectedRoom(roomName);
+      try {
+        await api.leaveRoom(roomName);
+        await refreshZones({ silent: true });
+        if (selectedRoomRef.current === roomName) {
+          setSelectedRoom(roomName);
+        }
+      } catch {
+        setError('Failed to remove room from group');
       }
     },
     [refreshZones],
@@ -264,6 +292,7 @@ export function useSonos() {
     bridgeReachable,
     currentCoordinator,
     currentGroupRooms,
+    playRoom,
     play,
     pause,
     next,

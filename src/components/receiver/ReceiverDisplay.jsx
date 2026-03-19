@@ -1,5 +1,5 @@
 const FALLBACK_ART =
-  'https://images.pexels.com/photos/164686/pexels-photo-164686.jpeg?auto=compress&cs=tinysrgb&w=400';
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%231a1a1a'/%3E%3Ccircle cx='100' cy='100' r='72' fill='none' stroke='%23333' stroke-width='2'/%3E%3Ccircle cx='100' cy='100' r='50' fill='none' stroke='%232a2a2a' stroke-width='1'/%3E%3Ccircle cx='100' cy='100' r='14' fill='%23222'/%3E%3Ccircle cx='100' cy='100' r='5' fill='%23444'/%3E%3C/svg%3E";
 
 export function ReceiverDisplay({ loading, error, currentTrack, playbackState, selectedRoom }) {
   const title = currentTrack?.title || (loading ? 'Loading Track...' : 'No Track Selected');

@@ -80,6 +80,19 @@ async function apiFetch(path) {
   return response.json();
 }
 
+// Unlike apiFetch, mutations never fall back to mock — errors are re-thrown so
+// the caller can surface them to the user.
+async function apiMutation(path) {
+  if (FORCE_MOCK) {
+    return { status: 'mock-ok' };
+  }
+  const response = await fetch(`${BASE_URL}${path}`);
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+  return response.json();
+}
+
 function withResolvedAlbumArt(track) {
   if (!track) return track;
   if (track.absoluteAlbumArtUri) {
@@ -112,44 +125,24 @@ export async function getState(room) {
   }
 }
 
-export async function play(room) {
-  try {
-    return await apiFetch(`/${encodeURIComponent(room)}/play`);
-  } catch {
-    return { status: 'mock-ok' };
-  }
+export function play(room) {
+  return apiMutation(`/${encodeURIComponent(room)}/play`);
 }
 
-export async function pause(room) {
-  try {
-    return await apiFetch(`/${encodeURIComponent(room)}/pause`);
-  } catch {
-    return { status: 'mock-ok' };
-  }
+export function pause(room) {
+  return apiMutation(`/${encodeURIComponent(room)}/pause`);
 }
 
-export async function next(room) {
-  try {
-    return await apiFetch(`/${encodeURIComponent(room)}/next`);
-  } catch {
-    return { status: 'mock-ok' };
-  }
+export function next(room) {
+  return apiMutation(`/${encodeURIComponent(room)}/next`);
 }
 
-export async function previous(room) {
-  try {
-    return await apiFetch(`/${encodeURIComponent(room)}/previous`);
-  } catch {
-    return { status: 'mock-ok' };
-  }
+export function previous(room) {
+  return apiMutation(`/${encodeURIComponent(room)}/previous`);
 }
 
-export async function setVolume(room, level) {
-  try {
-    return await apiFetch(`/${encodeURIComponent(room)}/volume/${level}`);
-  } catch {
-    return { status: 'mock-ok' };
-  }
+export function setVolume(room, level) {
+  return apiMutation(`/${encodeURIComponent(room)}/volume/${level}`);
 }
 
 export async function getFavorites(room) {
@@ -161,12 +154,8 @@ export async function getFavorites(room) {
   }
 }
 
-export async function playFavorite(room, name) {
-  try {
-    return await apiFetch(`/${encodeURIComponent(room)}/favorite/${encodeURIComponent(name)}`);
-  } catch {
-    return { status: 'mock-ok' };
-  }
+export function playFavorite(room, name) {
+  return apiMutation(`/${encodeURIComponent(room)}/favorite/${encodeURIComponent(name)}`);
 }
 
 export async function getPlaylists(room) {
@@ -177,44 +166,24 @@ export async function getPlaylists(room) {
   }
 }
 
-export async function playPlaylist(room, name) {
-  try {
-    return await apiFetch(`/${encodeURIComponent(room)}/playlist/${encodeURIComponent(name)}`);
-  } catch {
-    return { status: 'mock-ok' };
-  }
+export function playPlaylist(room, name) {
+  return apiMutation(`/${encodeURIComponent(room)}/playlist/${encodeURIComponent(name)}`);
 }
 
-export async function toggleShuffle(room) {
-  try {
-    return await apiFetch(`/${encodeURIComponent(room)}/shuffle/toggle`);
-  } catch {
-    return { status: 'mock-ok' };
-  }
+export function toggleShuffle(room) {
+  return apiMutation(`/${encodeURIComponent(room)}/shuffle/toggle`);
 }
 
-export async function toggleRepeat(room) {
-  try {
-    return await apiFetch(`/${encodeURIComponent(room)}/repeat/toggle`);
-  } catch {
-    return { status: 'mock-ok' };
-  }
+export function toggleRepeat(room) {
+  return apiMutation(`/${encodeURIComponent(room)}/repeat/toggle`);
 }
 
-export async function joinRoom(room, targetRoom) {
-  try {
-    return await apiFetch(`/${encodeURIComponent(room)}/join/${encodeURIComponent(targetRoom)}`);
-  } catch {
-    return { status: 'mock-ok' };
-  }
+export function joinRoom(room, targetRoom) {
+  return apiMutation(`/${encodeURIComponent(room)}/join/${encodeURIComponent(targetRoom)}`);
 }
 
-export async function leaveRoom(room) {
-  try {
-    return await apiFetch(`/${encodeURIComponent(room)}/leave`);
-  } catch {
-    return { status: 'mock-ok' };
-  }
+export function leaveRoom(room) {
+  return apiMutation(`/${encodeURIComponent(room)}/leave`);
 }
 
 export async function isBridgeReachable() {
