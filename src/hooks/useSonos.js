@@ -17,6 +17,7 @@ export function useSonos() {
   const selectedRoomRef = useRef(selectedRoom);
   selectedRoomRef.current = selectedRoom;
   const volumeCommitTimerRef = useRef(null);
+  const roomVolumeTimersRef = useRef({});
 
   const getRoomNamesFromZone = useCallback((zone) => {
     const members = Array.isArray(zone?.members)
@@ -73,6 +74,7 @@ export function useSonos() {
     if (volumeCommitTimerRef.current) {
       clearTimeout(volumeCommitTimerRef.current);
     }
+    Object.values(roomVolumeTimersRef.current).forEach((timer) => clearTimeout(timer));
   }, []);
 
   const normalizeQueue = useCallback((rawQueue) => {
@@ -222,6 +224,39 @@ export function useSonos() {
     }, 90);
   }, [selectedRoom]);
 
+  const roomVolumes = Object.fromEntries(
+    zones.flatMap((zone) => {
+      const members = Array.isArray(zone?.members) ? zone.members : [];
+      return members
+        .map((member) => {
+          const roomName = member?.roomName;
+          const memberVolume = member?.state?.volume;
+          if (!roomName || typeof memberVolume !== 'number') return null;
+          return [roomName, Math.max(0, Math.min(100, Math.round(memberVolume)))];
+        })
+        .filter(Boolean);
+    }),
+  );
+
+  const setRoomVolume = useCallback((roomName, level) => {
+    if (!roomName) return;
+    const clamped = Math.max(0, Math.min(100, Math.round(level)));
+    if (roomVolumeTimersRef.current[roomName]) {
+      clearTimeout(roomVolumeTimersRef.current[roomName]);
+    }
+    roomVolumeTimersRef.current[roomName] = setTimeout(async () => {
+      try {
+        await api.setVolume(roomName, clamped);
+        await refreshZones({ silent: true });
+        if (selectedRoomRef.current === roomName) {
+          setVolumeState(clamped);
+        }
+      } catch {
+        setError(`Failed to set volume for ${roomName}`);
+      }
+    }, 90);
+  }, [refreshZones]);
+
   const toggleShuffle = useCallback(async () => {
     if (!selectedRoom) return;
     try {
@@ -357,6 +392,7 @@ export function useSonos() {
     bridgeReachable,
     currentCoordinator,
     currentGroupRooms,
+    roomVolumes,
     playRoom,
     play,
     pause,
@@ -367,6 +403,7 @@ export function useSonos() {
     refreshZones,
     joinRoomToCurrentGroup,
     leaveRoomFromGroup,
+    setRoomVolume,
     playFavorite,
     playPlaylist,
     playFavoriteNext,

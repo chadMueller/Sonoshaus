@@ -2,7 +2,7 @@ const path = require('node:path');
 const { app, BrowserWindow } = require('electron');
 
 const isDev = Boolean(process.env.ELECTRON_START_URL);
-const shouldFullscreen = String(process.env.KIOSK_FULLSCREEN || 'true').toLowerCase() !== 'false';
+const shouldFullscreen = String(process.env.KIOSK_FULLSCREEN || 'false').toLowerCase() === 'true';
 
 function createWindow() {
   const win = new BrowserWindow({

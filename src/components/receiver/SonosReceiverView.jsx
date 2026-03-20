@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { ToggleSwitch } from './ToggleSwitch.jsx';
 import { ReceiverDisplay } from './ReceiverDisplay.jsx';
 import { TransportControls } from './TransportControls.jsx';
 import { VolumeKnob } from './VolumeKnob.jsx';
+import { RoomVolumeKnob } from './RoomVolumeKnob.jsx';
 import { MediaStack } from './MediaStack.jsx';
 import { useSonos } from '../../hooks/useSonos.js';
 
@@ -10,13 +11,21 @@ export function SonosReceiverView() {
   const sonos = useSonos();
   const isPlaying = sonos.playerState?.playbackState === 'PLAYING';
   const powerOn = !!sonos.selectedRoom && isPlaying;
+  const roomOrderRef = useRef(new Map());
 
   const roomLabels = useMemo(() => {
     const names =
       sonos.roomNames.length > 0
         ? sonos.roomNames
         : ['Living Room', 'Kitchen', 'Office', 'Bedroom', 'Patio', 'Den', 'Dining', 'Gym'];
-    return names.map((name) => ({ key: name, label: name }));
+    names.forEach((name) => {
+      if (!roomOrderRef.current.has(name)) {
+        roomOrderRef.current.set(name, roomOrderRef.current.size);
+      }
+    });
+    return [...names]
+      .sort((a, b) => (roomOrderRef.current.get(a) ?? 0) - (roomOrderRef.current.get(b) ?? 0))
+      .map((name) => ({ key: name, label: name }));
   }, [sonos.roomNames]);
 
   return (
@@ -34,7 +43,9 @@ export function SonosReceiverView() {
                 <div className="power-brand-cluster">
                   <div className="left-power-group">
                     <ToggleSwitch
-                      label="Power"
+                      label=""
+                      hideLabel
+                      ariaLabel="Power"
                       active={powerOn}
                       onToggle={() => {
                         if (!sonos.selectedRoom && roomLabels.length > 0) {
@@ -54,7 +65,7 @@ export function SonosReceiverView() {
                   </div>
 
                   <div className="brand-block">
-                    <div className="brand-name">SONOS</div>
+                    <div className="brand-name">M-HAUS</div>
                     <div className="model-name">MODEL S-1600</div>
                   </div>
                 </div>
@@ -97,8 +108,14 @@ export function SonosReceiverView() {
                         onSecondaryClick={() => sonos.setSelectedRoom(room.key)}
                         secondaryLabel="Solo"
                         secondaryActive={sonos.selectedRoom === room.key}
-                        compact
                       />
+                      <div className="room-volume-wrap">
+                        <RoomVolumeKnob
+                          label={room.label}
+                          value={sonos.roomVolumes[room.key] ?? 0}
+                          onChange={(nextVolume) => sonos.setRoomVolume(room.key, nextVolume)}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>

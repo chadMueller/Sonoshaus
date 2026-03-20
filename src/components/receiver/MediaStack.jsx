@@ -32,7 +32,6 @@ export function MediaStack({
   onPlayPlaylistNext,
 }) {
   const [activeTab, setActiveTab] = useState('favorites');
-  const [query, setQuery] = useState('');
 
   const favoriteItems = useMemo(() => sourceToItems(favorites), [favorites]);
   const playlistItems = useMemo(() => sourceToItems(playlists), [playlists]);
@@ -57,14 +56,6 @@ export function MediaStack({
         return favoriteItems;
     }
   }, [activeTab, favoriteItems, playlistItems, queueItems]);
-
-  const filteredItems = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return activeItems;
-    return activeItems.filter((item) =>
-      `${item.title} ${item.subtitle}`.toLowerCase().includes(q),
-    );
-  }, [activeItems, query]);
 
   const handlePlay = (item) => {
     const value = item.title;
@@ -91,12 +82,12 @@ export function MediaStack({
       <div className="stack-wood">
         <div className="stack-faceplate">
           <div className="stack-header">
-            <div className="stack-title">Media Stack</div>
+            <div className="stack-title" aria-hidden="true" />
             <div className="stack-room">{selectedRoom ? `Room: ${selectedRoom}` : 'Select a room'}</div>
           </div>
 
-          <div className="stack-controls">
-            <div className="stack-tabs">
+          <div className="stack-browser">
+            <div className="stack-tabs stack-tabs-vertical">
               {tabs.map((tab) => (
                 <button
                   key={tab.key}
@@ -108,35 +99,24 @@ export function MediaStack({
                 </button>
               ))}
             </div>
-
-            <input
-              className="stack-search"
-              type="text"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter library..."
-              aria-label="Filter media list"
-            />
-          </div>
-
-          <div className="stack-list">
-            {loading ? (
-              <div className="stack-empty">Loading media...</div>
-            ) : filteredItems.length === 0 ? (
-              <div className="stack-empty">No items found</div>
-            ) : (
-              filteredItems.map((item) => (
-                <button
-                  key={`${activeTab}-${item.title}`}
-                  type="button"
-                  className="stack-item"
-                  onClick={() => handlePlay(item)}
-                  title={item.title}
-                >
-                  <div className="stack-item-text">
-                    <div className="stack-item-title">{item.title}</div>
-                    {item.subtitle ? <div className="stack-item-subtitle">{item.subtitle}</div> : null}
-                  </div>
+            <div className="stack-list">
+              {loading ? (
+                <div className="stack-empty">Loading media...</div>
+              ) : activeItems.length === 0 ? (
+                <div className="stack-empty">No items found</div>
+              ) : (
+                activeItems.map((item) => (
+                  <button
+                    key={`${activeTab}-${item.title}`}
+                    type="button"
+                    className="stack-item"
+                    onClick={() => handlePlay(item)}
+                    title={item.title}
+                  >
+                    <div className="stack-item-text">
+                      <div className="stack-item-title">{item.title}</div>
+                      {item.subtitle ? <div className="stack-item-subtitle">{item.subtitle}</div> : null}
+                    </div>
                     <div className="stack-item-actions">
                       {(activeTab === 'favorites' || activeTab === 'playlists') && (
                         <button
@@ -153,9 +133,10 @@ export function MediaStack({
                       )}
                       <div className="stack-item-action">Play</div>
                     </div>
-                </button>
-              ))
-            )}
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>
