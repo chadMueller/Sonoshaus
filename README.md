@@ -1,6 +1,6 @@
 # Sonoshaus
 
-A retro “stereo reeciver stack” style UI for controlling Sonos on your network. The on-device branding reads **Sonohaus**; the project name is **Sonoshaus**.
+A retro “stereo receiver stack” style UI for controlling Sonos on your network. The on-device branding reads **Sonohaus**; the project name is **Sonoshaus**.
 
 ## How it works
 
@@ -22,6 +22,19 @@ There are no Sonos or Spotify API keys in the default code path for basic contro
 - Node.js 18+ recommended  
 - A running **node-sonos-http-api** instance reachable from the machine running the UI  
 - Network path from the browser (or Electron) to `http://<bridge-host>:5005` (default port for the bridge)
+
+## Install
+
+### macOS (from the DMG in this repo)
+
+1. On GitHub, open **`release/`** and download **`Sonohaus-*-arm64.dmg`** (Apple Silicon). Or clone the repo and double-click the file locally.
+2. Open the disk image, drag **Sonohaus** into **Applications**.
+3. If macOS blocks the app (unsigned / not notarized), open **System Settings → Privacy & Security** and choose **Open Anyway** for Sonohaus, or right‑click the app → **Open** the first time.
+4. Run **[node-sonos-http-api](https://github.com/jishi/node-sonos-http-api)** on your LAN (see **Sonos bridge** below). The packaged app talks to whatever **`VITE_SONOS_API_URL`** was set at **build** time; if that doesn’t match your setup, set `.env` and run `npm run desktop:build` again, or use **`npm run dev`** / a hosted web build with the right env.
+
+### Web / dev (from source)
+
+Use **Quick start** below (`npm install`, `.env`, `npm run dev`).
 
 ## Quick start
 
