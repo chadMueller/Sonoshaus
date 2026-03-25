@@ -15,7 +15,7 @@ A retro “stereo reeciver stack” style UI for controlling Sonos on your netwo
 2. **Sonoshaus** is a static React app that calls that API: rooms/zones, transport, volume, favorites, playlists, and queue (depending on what the bridge exposes).
 3. **Electron** (optional) wraps the built UI so you can run it like a normal macOS app. The UI is still static files; it does not bundle the bridge.
 
-There are no Sonos or Spotify API keys inside this repo’s runtime path for basic control—only the **bridge URL** you configure. Optional Spotify-related variables in `.env.example` are for integrations you wire up yourself; treat secrets as described below.
+There are no Sonos or Spotify API keys in the default code path for basic control—only the **bridge URL** you configure. Optional Spotify-related variables in `.env.example` are for integrations you add yourself.
 
 ## Requirements
 
@@ -41,7 +41,7 @@ Set `VITE_SONOS_API_URL` to wherever the API listens, for example:
 - Bridge on the same computer: `http://localhost:5005`
 - Bridge on another device: `http://192.168.x.x:5005`
 
-`VITE_*` variables are **inlined at build time**. After changing them, run `npm run build` again before packaging or deploying static files.
+`VITE_*` variables are **inlined at build time** (they end up in public JavaScript—do not put secrets there). After changing them, run `npm run build` again before packaging or deploying static files. Keep private values in **`.env`** only; that file is gitignored.
 
 ## Scripts
 
@@ -51,7 +51,19 @@ Set `VITE_SONOS_API_URL` to wherever the API listens, for example:
 | `npm run build` | Production build → `dist/` |
 | `npm run preview` | Preview the production build |
 | `npm run desktop:dev` | Vite + Electron for desktop development |
-| `npm run desktop:build` | `npm run build` then `electron-builder` (output under `release/`) |
+| `npm run desktop:build` | `npm run build` then `electron-builder` → macOS `.dmg` in `release/` |
+
+## macOS app (DMG)
+
+Build a signed/unsigned installer locally:
+
+```bash
+npm run desktop:build
+```
+
+**`release/*.dmg`** — the disk image is **tracked in git** so clones include a ready-to-open macOS build. Unpacked `release/mac-arm64/` and other electron-builder scratch output stay ignored (large, reproducible from source).
+
+If a `.dmg` exceeds [GitHub’s ~100 MB file limit](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-git-large-file-storage), use [Git LFS](https://git-lfs.com) for that file or attach it to a [GitHub Release](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases) instead.
 
 ## Sonos bridge (node-sonos-http-api)
 
@@ -90,13 +102,6 @@ From this directory:
 This can install LaunchAgents for the bridge and UI, and add desktop shortcuts (`Start` / `Stop` / `Status` Sonos Remote). See `ops/mini/install.sh` for paths and overrides (e.g. `BRIDGE_DIR`).
 
 Uninstall: `./ops/mini/uninstall.sh`
-
-## Security & GitHub
-
-- **Never commit `.env`.** It is listed in `.gitignore`. Only `.env.example` belongs in git.
-- **Do not put secrets in `VITE_*` variables.** Anything prefixed with `VITE_` is embedded in the client JavaScript anyone can read. Use non-`VITE_` env vars for server-side tooling, or a small backend you control.
-- **Build artifacts** (`dist/`, `release/`) are gitignored. Clone → `npm install` → `npm run build` before `desktop:build`.
-- If you previously had API keys only in `.env`, rotate them in the relevant dashboards (e.g. Spotify Developer) if there was any chance they were copied or committed.
 
 ## License
 

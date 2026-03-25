@@ -9,8 +9,9 @@ node_modules/
 # Build outputs (regenerate with `npm run build`)
 dist/
 
-# Electron / installer output
-release/
+# Electron: ignore unpacked apps and metadata; keep macOS `.dmg` installers (see README)
+release/*
+!release/*.dmg
 out/
 
 # OS / editor
