@@ -1,6 +1,6 @@
 {
-  "name": "Sonos Controller",
-  "short_name": "Sonos",
+  "name": "Sonohaus",
+  "short_name": "Sonohaus",
   "description": "Retro car stereo Sonos controller",
   "start_url": "/",
   "display": "standalone",

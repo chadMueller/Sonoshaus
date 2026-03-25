@@ -101,7 +101,7 @@ export function MediaStack({
             </div>
             <div className="stack-list">
               {loading ? (
-                <div className="stack-empty">Loading media...</div>
+                <div className="stack-empty">Working on getting your sonos catalog</div>
               ) : activeItems.length === 0 ? (
                 <div className="stack-empty">No items found</div>
               ) : (

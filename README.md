@@ -1,50 +1,59 @@
-# Sonos Receiver UI
+# Sonoshaus
 
-Retro Sonos controller UI built with React + Vite.
+A retro “car stereo” style UI for controlling Sonos on your network. The on-device branding reads **Sonohaus**; the project name is **Sonoshaus**.
 
-## 1) Configure Sonos API URL
+## How it works
 
-Copy `.env.example` to `.env` and set your bridge host:
+```text
+┌─────────────────┐     HTTP (REST)      ┌──────────────────────────┐     LAN      ┌─────────┐
+│  Sonoshaus UI   │ ───────────────────► │  node-sonos-http-api     │ ───────────► │  Sonos  │
+│  (React + Vite) │   zones, play, vol…   │  (bridge, e.g. :5005)    │   UPnP/…    │ speakers│
+└─────────────────┘                       └──────────────────────────┘              └─────────┘
+```
+
+1. **[node-sonos-http-api](https://github.com/jishi/node-sonos-http-api)** runs on a Mac, PC, or Raspberry Pi on the same network as your speakers. It exposes a simple HTTP API around Sonos’s local protocol.
+2. **Sonoshaus** is a static React app that calls that API: rooms/zones, transport, volume, favorites, playlists, and queue (depending on what the bridge exposes).
+3. **Electron** (optional) wraps the built UI so you can run it like a normal macOS app. The UI is still static files; it does not bundle the bridge.
+
+There are no Sonos or Spotify API keys inside this repo’s runtime path for basic control—only the **bridge URL** you configure. Optional Spotify-related variables in `.env.example` are for integrations you wire up yourself; treat secrets as described below.
+
+## Requirements
+
+- Node.js 18+ recommended  
+- A running **node-sonos-http-api** instance reachable from the machine running the UI  
+- Network path from the browser (or Electron) to `http://<bridge-host>:5005` (default port for the bridge)
+
+## Quick start
 
 ```bash
 cp .env.example .env
-```
-
-If the Sonos bridge runs on your Mac mini:
-
-```dotenv
-VITE_SONOS_API_URL=http://<MAC_MINI_IP>:5005
-```
-
-Optional:
-
-```dotenv
-# Force fullscreen after first interaction + auto-reload after idle period
-VITE_KIOSK_FULLSCREEN=true
-VITE_KIOSK_IDLE_MINUTES=45
-```
-
-## 2) Run locally
-
-```bash
+# Edit .env — set VITE_SONOS_API_URL to your bridge (see below)
 npm install
 npm run dev
 ```
 
-Open the URL shown in terminal (for example `http://localhost:3003`).
+Open the URL Vite prints (dev server uses port **3000** by default).
 
-## Media Stack tabs
+### Pointing at the bridge
 
-The lower stack supports:
-- Favorites
-- Playlists
-- Queue (if your bridge exposes queue endpoints)
+Set `VITE_SONOS_API_URL` to wherever the API listens, for example:
 
-`Play next` is enabled for Favorites/Playlists and automatically degrades if unsupported by your current bridge endpoint.
+- Bridge on the same computer: `http://localhost:5005`
+- Bridge on another device: `http://192.168.x.x:5005`
 
-## 3) Mac mini Sonos bridge
+`VITE_*` variables are **inlined at build time**. After changing them, run `npm run build` again before packaging or deploying static files.
 
-Run `node-sonos-http-api` on the mini:
+## Scripts
+
+| Command | Purpose |
+|--------|---------|
+| `npm run dev` | Vite dev server with hot reload |
+| `npm run build` | Production build → `dist/` |
+| `npm run preview` | Preview the production build |
+| `npm run desktop:dev` | Vite + Electron for desktop development |
+| `npm run desktop:build` | `npm run build` then `electron-builder` (output under `release/`) |
+
+## Sonos bridge (node-sonos-http-api)
 
 ```bash
 git clone https://github.com/jishi/node-sonos-http-api.git
@@ -53,77 +62,42 @@ npm install
 npm start
 ```
 
-Verify:
+Smoke test:
 
 ```bash
 curl http://localhost:5005/zones
 ```
 
-## 4) Tablet / Raspberry Pi usage
+## Media stack
 
-- Keep Sonos bridge running on the Mac mini.
-- Run this UI on the device or on the mini.
-- Make sure the device can reach `http://<MAC_MINI_IP>:5005`.
-- Since Vite is set with `host: true`, the dev server is reachable over LAN.
+The lower panel supports **Favorites**, **Playlists**, and **Queue** when the bridge exposes those endpoints. **Play next** is enabled for favorites/playlists and degrades gracefully if the bridge does not support it.
 
-For production on a Pi, build and serve static files:
+## Kiosk / wall tablet (optional)
 
-```bash
-npm run build
-npx vite preview --host
+```dotenv
+VITE_KIOSK_FULLSCREEN=true
+VITE_KIOSK_IDLE_MINUTES=45
 ```
 
-## 5) Set-and-forget on Mac mini (no terminal daily)
+## Set-and-forget on a Mac mini
 
-If you want this to run automatically after reboot and manage it with desktop shortcuts:
+From this directory:
 
 ```bash
-cd "/Users/chadmueller/vibing/sonos"
 ./ops/mini/install.sh
 ```
 
-What this does:
-- Installs/builds the UI
-- Installs bridge deps (from `~/node-sonos-http-api`)
-- Creates macOS LaunchAgents that auto-run:
-  - Sonos bridge on port `5005`
-  - Sonos UI on port `3003`
-- Creates desktop shortcuts:
-  - `Start Sonos Remote.command`
-  - `Stop Sonos Remote.command`
-  - `Sonos Remote Status.command`
+This can install LaunchAgents for the bridge and UI, and add desktop shortcuts (`Start` / `Stop` / `Status` Sonos Remote). See `ops/mini/install.sh` for paths and overrides (e.g. `BRIDGE_DIR`).
 
-If your bridge repo is in a different path:
+Uninstall: `./ops/mini/uninstall.sh`
 
-```bash
-BRIDGE_DIR="/path/to/node-sonos-http-api" ./ops/mini/install.sh
-```
+## Security & GitHub
 
-### Later (everyday)
-- Do nothing. Services restart automatically after reboot/login.
-- If needed, use the desktop shortcuts to start/stop/check status.
+- **Never commit `.env`.** It is listed in `.gitignore`. Only `.env.example` belongs in git.
+- **Do not put secrets in `VITE_*` variables.** Anything prefixed with `VITE_` is embedded in the client JavaScript anyone can read. Use non-`VITE_` env vars for server-side tooling, or a small backend you control.
+- **Build artifacts** (`dist/`, `release/`) are gitignored. Clone → `npm install` → `npm run build` before `desktop:build`.
+- If you previously had API keys only in `.env`, rotate them in the relevant dashboards (e.g. Spotify Developer) if there was any chance they were copied or committed.
 
-### Uninstall
+## License
 
-```bash
-./ops/mini/uninstall.sh
-```
-
-## 6) macOS desktop app wrapper
-
-This project includes an Electron wrapper so you can run it as a native macOS app.
-
-Dev mode:
-
-```bash
-npm install
-npm run desktop:dev
-```
-
-Build a macOS app installer:
-
-```bash
-npm run desktop:build
-```
-
-Output goes to `release/` (DMG target).
+Add a `LICENSE` when you publish the repo if you want others to reuse the code.

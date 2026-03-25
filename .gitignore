@@ -1,0 +1,26 @@
+# Secrets — never commit (copy from .env.example)
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build outputs (regenerate with `npm run build`)
+dist/
+
+# Electron / installer output
+release/
+out/
+
+# OS / editor
+.DS_Store
+*.log
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Debug / local
+*.local
+coverage/

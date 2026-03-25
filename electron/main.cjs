@@ -13,7 +13,7 @@ function createWindow() {
     autoHideMenuBar: true,
     fullscreen: shouldFullscreen,
     backgroundColor: '#0b0b0b',
-    title: 'Sonos Receiver',
+    title: 'Sonohaus',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

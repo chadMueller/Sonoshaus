@@ -65,7 +65,7 @@ export function SonosReceiverView() {
                   </div>
 
                   <div className="brand-block">
-                    <div className="brand-name">M-HAUS</div>
+                    <div className="brand-name">Sonohaus</div>
                     <div className="model-name">MODEL S-1600</div>
                   </div>
                 </div>
