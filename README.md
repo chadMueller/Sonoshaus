@@ -1,6 +1,6 @@
 # Sonoshaus
 
-A retro “car stereo” style UI for controlling Sonos on your network. The on-device branding reads **Sonohaus**; the project name is **Sonoshaus**.
+A retro “stereo reeciver stack” style UI for controlling Sonos on your network. The on-device branding reads **Sonohaus**; the project name is **Sonoshaus**.
 
 ## How it works
 
