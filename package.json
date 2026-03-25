@@ -27,6 +27,11 @@
   "build": {
     "appId": "com.chadmueller.sonosreceiver",
     "productName": "Sonohaus",
+    "compression": "maximum",
+    "electronLanguages": [
+      "en"
+    ],
+    "publish": null,
     "directories": {
       "output": "release"
     },
@@ -35,9 +40,17 @@
       "electron/**/*",
       "package.json"
     ],
+    "dmg": {
+      "format": "ULFO"
+    },
     "mac": {
       "target": [
-        "dmg"
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
       ],
       "category": "public.app-category.music"
     }

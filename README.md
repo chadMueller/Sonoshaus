@@ -61,6 +61,10 @@ Build a signed/unsigned installer locally:
 npm run desktop:build
 ```
 
+The build is tuned to trim what we can: English-only Electron locales (`electronLanguages`), **maximum** asar compression, **ARM64-only** Apple Silicon builds, **ULFO** DMG layout, and no production sourcemaps. Expect a **modest** drop (on the order of a few MB at most)—almost all of the size is Chromium inside Electron. To go meaningfully smaller you’d need a different shell (e.g. Tauri) or ship the web UI in a browser only.
+
+**Intel Macs:** in `package.json` under `build.mac.target`, set the dmg entry’s `arch` to `["x64"]` or `["x64", "arm64"]` (universal is larger).
+
 **`release/*.dmg`** — the disk image is **tracked in git** so clones include a ready-to-open macOS build. Unpacked `release/mac-arm64/` and other electron-builder scratch output stay ignored (large, reproducible from source).
 
 If a `.dmg` exceeds [GitHub’s ~100 MB file limit](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-git-large-file-storage), use [Git LFS](https://git-lfs.com) for that file or attach it to a [GitHub Release](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases) instead.
