@@ -1,0 +1,9 @@
+# Vercel runs npm install remotely — do not upload local installs or artifacts
+node_modules
+release
+dist
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
