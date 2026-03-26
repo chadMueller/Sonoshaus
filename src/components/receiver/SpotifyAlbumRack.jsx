@@ -4,6 +4,8 @@ import {
   clearStoredTokens,
   getSpotifyConfig,
   isSpotifyAuthed,
+  setSpotifyClientId,
+  getStoredClientId,
 } from '../../lib/spotify/auth.js';
 import { getAlbumTracksAll, getSavedAlbumsPage } from '../../lib/spotify/api.js';
 import { clearQueue, playSpotifyTrackNow, queueSpotifyTrack, shuffleOff } from '../../api/sonos.js';
@@ -72,6 +74,8 @@ export function SpotifyAlbumRack({
   const offsetRef = useRef(0);
   const { clientId } = getSpotifyConfig();
   const [spotifyAuthed, setSpotifyAuthed] = useState(() => isSpotifyAuthed());
+  const [showSpotifySetup, setShowSpotifySetup] = useState(false);
+  const [clientIdInput, setClientIdInput] = useState(() => getStoredClientId());
 
   hasMoreRef.current = hasMore;
   loadingMoreRef.current = loadingMore;
@@ -556,13 +560,6 @@ export function SpotifyAlbumRack({
       <div className="cd-faceplate">
         <div className="cd-header">
           <div className="cd-actions cd-actions-left">
-            {!clientId ? (
-              <div className="cd-pill cd-pill-warn">Set VITE_SPOTIFY_CLIENT_ID</div>
-            ) : !canUseSpotify() ? (
-              <div className="cd-pill cd-pill-warn">
-                Spotify auth needs http(s):// — open via your LAN URL
-              </div>
-            ) : null}
             <div className="cd-view-toggle" role="group" aria-label="Content">
               <button
                 type="button"
@@ -625,7 +622,7 @@ export function SpotifyAlbumRack({
                 </button>
               </div>
             ) : null}
-            {contentMode === 'albums' && clientId && canUseSpotify() ? (
+            {contentMode === 'albums' ? (
               spotifyAuthed ? (
                 <button
                   type="button"
@@ -636,14 +633,55 @@ export function SpotifyAlbumRack({
                 >
                   Disconnect
                 </button>
-              ) : (
+              ) : clientId && canUseSpotify() ? (
                 <button type="button" className="cd-action" onClick={handleConnect} aria-label="Connect Spotify">
                   Connect
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="cd-action"
+                  onClick={() => setShowSpotifySetup((v) => !v)}
+                  aria-label="Set up Spotify"
+                >
+                  {showSpotifySetup ? 'Close' : 'Setup'}
                 </button>
               )
             ) : null}
           </div>
         </div>
+
+        {showSpotifySetup ? (
+          <div className="cd-spotify-setup">
+            <div className="cd-spotify-setup-steps">
+              <p>1. Go to developer.spotify.com/dashboard and create an app</p>
+              <p>2. Add this redirect URI: <strong>{window.location.origin}/</strong></p>
+              <p>3. Copy your Client ID and paste it below</p>
+            </div>
+            <div className="cd-spotify-setup-input">
+              <input
+                type="text"
+                className="cd-search-input"
+                value={clientIdInput}
+                onChange={(e) => setClientIdInput(e.target.value)}
+                placeholder="Paste Spotify Client ID..."
+                aria-label="Spotify Client ID"
+              />
+              <button
+                type="button"
+                className="cd-action"
+                onClick={() => {
+                  setSpotifyClientId(clientIdInput);
+                  setShowSpotifySetup(false);
+                  window.location.reload();
+                }}
+                disabled={!clientIdInput.trim()}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        ) : null}
 
           <div className="cd-controls">
             <div className="cd-search">

@@ -2203,6 +2203,43 @@
   opacity: 1;
 }
 
+.cd-spotify-setup {
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cd-spotify-setup-steps {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.4px;
+  line-height: 1.6;
+  color: var(--text-engraved);
+}
+
+.cd-spotify-setup-steps p {
+  margin: 0;
+}
+
+.cd-spotify-setup-steps strong {
+  color: var(--amber-dim);
+  user-select: all;
+}
+
+.cd-spotify-setup-input {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cd-spotify-setup-input .cd-search-input {
+  flex: 1;
+}
+
 .cd-controls {
   display: flex;
   align-items: center;

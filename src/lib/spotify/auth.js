@@ -20,13 +20,30 @@ function safeJsonParse(value) {
   }
 }
 
+const CLIENT_ID_STORAGE_KEY = 'sonohaus.spotifyClientId';
+
 export function getSpotifyConfig() {
-  const clientId = String(import.meta.env.VITE_SPOTIFY_CLIENT_ID || '').trim();
+  const clientId =
+    localStorage.getItem(CLIENT_ID_STORAGE_KEY)?.trim() ||
+    String(import.meta.env.VITE_SPOTIFY_CLIENT_ID || '').trim();
   const redirectUri =
     String(import.meta.env.VITE_SPOTIFY_REDIRECT_URI || '').trim() ||
     `${window.location.origin}${window.location.pathname}`;
 
   return { clientId, redirectUri };
+}
+
+export function setSpotifyClientId(id) {
+  const trimmed = (id || '').trim();
+  if (trimmed) {
+    localStorage.setItem(CLIENT_ID_STORAGE_KEY, trimmed);
+  } else {
+    localStorage.removeItem(CLIENT_ID_STORAGE_KEY);
+  }
+}
+
+export function getStoredClientId() {
+  return localStorage.getItem(CLIENT_ID_STORAGE_KEY)?.trim() || '';
 }
 
 export function getStoredTokens() {

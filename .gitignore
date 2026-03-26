@@ -9,10 +9,12 @@ node_modules/
 # Build outputs (regenerate with `npm run build`)
 dist/
 
-# Electron: ignore unpacked apps and metadata; keep macOS `.dmg` installers (see README)
-release/*
-!release/*.dmg
+# Electron: ignore all build output (DMGs distributed via GitHub Releases)
+release/
 out/
+
+# Bridge (fetched by scripts/prepare-bridge.sh, not tracked in git)
+bridge/
 
 # Local dev certs (contains private key)
 .certs/

@@ -1,15 +1,16 @@
 {
   "name": "sonos-controller",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "concurrently -k \"vite\" \"python3 https-proxy.py\"",
     "build": "vite build",
     "preview": "vite preview",
+    "prepare-bridge": "bash scripts/prepare-bridge.sh",
     "desktop:dev": "concurrently -k \"vite\" \"wait-on tcp:3000 && cross-env ELECTRON_START_URL=http://localhost:3000 electron electron/main.cjs\"",
-    "desktop:build": "npm run build && electron-builder"
+    "desktop:build": "npm run prepare-bridge && npm run build && electron-builder"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -39,7 +40,11 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "bridge/**/*",
       "package.json"
+    ],
+    "asarUnpack": [
+      "bridge/**/*"
     ],
     "dmg": {
       "format": "ULFO"
