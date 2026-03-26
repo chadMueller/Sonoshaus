@@ -2,6 +2,7 @@ export function ToggleSwitch({
   label,
   active,
   onToggle,
+  pending = false,
   compact = false,
   hideLabel = false,
   ariaLabel,
@@ -14,34 +15,38 @@ export function ToggleSwitch({
   };
 
   return (
-    <div className={`toggle-container ${compact ? 'compact' : ''} ${active ? 'active' : ''}`}>
+    <div
+      className={`toggle-container ${compact ? 'compact' : ''} ${active ? 'active' : ''} ${pending ? 'pending' : ''}`}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        const target = event.target;
+        if (target && typeof target.closest === 'function' && target.closest('.toggle-focus-button')) return;
+        event.preventDefault();
+        activate();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          activate();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-pressed={active}
+      aria-busy={pending || undefined}
+      aria-label={ariaLabel || label}
+    >
       {!hideLabel ? (
         <span className="engraved-text" title={label}>
           {label}
         </span>
       ) : null}
       <span className={`toggle-status-light ${active ? 'on' : 'off'}`} aria-hidden="true" />
-      <button
-        type="button"
-        className="toggle-hit-area"
-        onPointerDown={(event) => {
-          if (event.button !== 0) return;
-          event.preventDefault();
-          activate();
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            activate();
-          }
-        }}
-        aria-pressed={active}
-        aria-label={ariaLabel || label}
-      >
+      <div className="toggle-hit-area" aria-hidden="true">
         <div className="toggle-track">
           <div className="toggle-lever" />
         </div>
-      </button>
+      </div>
       {onSecondaryClick ? (
         <button
           type="button"

@@ -1,11 +1,11 @@
 {
   "name": "sonos-controller",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k \"vite\" \"python3 https-proxy.py\"",
     "build": "vite build",
     "preview": "vite preview",
     "desktop:dev": "concurrently -k \"vite\" \"wait-on tcp:3000 && cross-env ELECTRON_START_URL=http://localhost:3000 electron electron/main.cjs\"",
@@ -16,17 +16,18 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.2.1",
+    "@vitejs/plugin-react": "^4.7.0",
     "concurrently": "^9.2.1",
     "cross-env": "^7.0.3",
     "electron": "^32.1.2",
     "electron-builder": "^25.1.8",
-    "wait-on": "^8.0.1",
-    "vite": "^5.0.12"
+    "vite": "^6.4.1",
+    "wait-on": "^8.0.1"
   },
   "build": {
     "appId": "com.chadmueller.sonosreceiver",
     "productName": "Sonohaus",
+    "icon": "build/icon.icns",
     "compression": "maximum",
     "electronLanguages": [
       "en"
@@ -44,6 +45,7 @@
       "format": "ULFO"
     },
     "mac": {
+      "icon": "build/icon.icns",
       "target": [
         {
           "target": "dmg",

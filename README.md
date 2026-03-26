@@ -47,6 +47,33 @@ npm run dev
 
 Open the URL Vite prints (dev server uses port **3000** by default).
 
+## Spotify album rack (optional)
+
+Sonoshaus can optionally connect to your Spotify account to browse **saved albums** (album-first) and “load” an album into the **Sonos queue**:
+
+- Click album → starts track 1 on the selected room
+- Remaining tracks are appended to the current Sonos queue
+- Next/previous uses the existing receiver transport controls
+
+### Setup
+
+1. Create a Spotify app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
+2. Under **Redirect URIs**, add the **exact** URL you use to open Sonoshaus in the browser — same host, port, and trailing slash. For LAN testing this is usually your machine’s IP, not `localhost`, for example:
+   - `http://192.168.x.x:3000/`
+3. Copy your Spotify **Client ID** into `.env` (must match the redirect you registered):
+
+```dotenv
+VITE_SPOTIFY_CLIENT_ID=your_spotify_client_id
+VITE_SPOTIFY_REDIRECT_URI=http://192.168.x.x:3000/
+```
+
+Open the app at that same URL (e.g. `http://192.168.4.79:3000/`). If `VITE_SPOTIFY_REDIRECT_URI` is unset, the app falls back to the current page URL — it must still be listed in the Spotify dashboard.
+
+### Notes
+
+- Spotify auth is **OAuth PKCE** (no client secret required).
+- Spotify auth needs a normal `http://` or `https://` origin (not the packaged Electron `file://` build). Use your LAN IP in the address bar if that’s what you registered with Spotify.
+
 ### Pointing at the bridge
 
 Set `VITE_SONOS_API_URL` to wherever the API listens, for example:

@@ -1,8 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { SonosReceiverView } from './components/receiver/SonosReceiverView.jsx';
 import './styles/sonosReceiver.css';
+import { handleSpotifyRedirectIfPresent } from './lib/spotify/auth.js';
 
 export function App() {
+  const [spotifyAuthError, setSpotifyAuthError] = useState(null);
+
   useEffect(() => {
     const kioskFullscreen =
       String(import.meta.env.VITE_KIOSK_FULLSCREEN || '').toLowerCase() === 'true';
@@ -40,5 +43,21 @@ export function App() {
     };
   }, []);
 
-  return <SonosReceiverView />;
+  useEffect(() => {
+    let cancelled = false;
+    handleSpotifyRedirectIfPresent()
+      .then(() => {
+        if (!cancelled) {
+          setSpotifyAuthError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setSpotifyAuthError(err?.message || 'Spotify authentication failed');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return <SonosReceiverView spotifyAuthError={spotifyAuthError} />;
 }

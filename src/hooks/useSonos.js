@@ -1,6 +1,26 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '../api/sonos.js';
 
+const LAST_SELECTED_ROOM_KEY = 'sonohaus.lastSelectedRoom.v1';
+
+function safeLoadLastSelectedRoom() {
+  try {
+    const v = localStorage.getItem(LAST_SELECTED_ROOM_KEY);
+    return v && typeof v === 'string' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeSaveLastSelectedRoom(roomName) {
+  try {
+    if (!roomName) return;
+    localStorage.setItem(LAST_SELECTED_ROOM_KEY, String(roomName));
+  } catch {
+    // ignore
+  }
+}
+
 export function useSonos() {
   const [zones, setZones] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
@@ -13,9 +33,12 @@ export function useSonos() {
   const [bridgeReachable, setBridgeReachable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [roomStates, setRoomStates] = useState({});
+  const [roomLastActiveAt, setRoomLastActiveAt] = useState({});
 
   const selectedRoomRef = useRef(selectedRoom);
   selectedRoomRef.current = selectedRoom;
+  const userSelectedRoomRef = useRef(false);
   const volumeCommitTimerRef = useRef(null);
   const roomVolumeTimersRef = useRef({});
 
@@ -41,7 +64,9 @@ export function useSonos() {
       setBridgeReachable(true);
       setError(null);
       if (!selectedRoomRef.current && data.length > 0) {
-        setSelectedRoom(data[0].coordinator.roomName);
+        // Temporary default; auto-join logic below may override on first scan.
+        const fallback = safeLoadLastSelectedRoom() || data[0].coordinator.roomName;
+        setSelectedRoom(fallback);
       }
       return data;
     } catch {
@@ -52,6 +77,70 @@ export function useSonos() {
       if (!silent) setLoading(false);
     }
   }, []);
+
+  const setSelectedRoomAndPersist = useCallback((roomName) => {
+    userSelectedRoomRef.current = true;
+    safeSaveLastSelectedRoom(roomName);
+    setSelectedRoom(roomName);
+  }, []);
+
+  const getCoordinatorRooms = useCallback((zoneList) => {
+    const list = Array.isArray(zoneList) ? zoneList : [];
+    return list.map((z) => z?.coordinator?.roomName).filter(Boolean);
+  }, []);
+
+  const scanCoordinatorActivity = useCallback(
+    async (zoneList, { allowAutoSelect = false } = {}) => {
+      const coordinators = getCoordinatorRooms(zoneList);
+      if (coordinators.length === 0) return;
+
+      const now = Date.now();
+      const results = await Promise.all(
+        coordinators.map(async (roomName) => {
+          try {
+            const state = await api.getState(roomName);
+            return { roomName, state };
+          } catch {
+            return { roomName, state: null };
+          }
+        }),
+      );
+
+      setRoomStates((prev) => {
+        const next = { ...prev };
+        for (const r of results) {
+          if (r.state) next[r.roomName] = r.state;
+        }
+        return next;
+      });
+
+      setRoomLastActiveAt((prev) => {
+        const next = { ...prev };
+        for (const r of results) {
+          const s = r.state;
+          if (!s) continue;
+          const playing = s.playbackState === 'PLAYING';
+          if (playing) next[r.roomName] = now;
+        }
+        return next;
+      });
+
+      if (!allowAutoSelect) return;
+      if (userSelectedRoomRef.current) return;
+
+      // Choose most recently active; if none playing, fall back to last selected.
+      const lastSelected = safeLoadLastSelectedRoom();
+      const activityPairs = results
+        .map((r) => [r.roomName, roomLastActiveAt[r.roomName] || 0, r.state?.playbackState])
+        .sort((a, b) => b[1] - a[1]);
+      const bestActive = activityPairs.find((p) => p[1] > 0 && p[2] === 'PLAYING')?.[0] || activityPairs[0]?.[0] || null;
+      const target = bestActive || lastSelected || coordinators[0] || null;
+      if (target && target !== selectedRoomRef.current) {
+        setSelectedRoom(target);
+      }
+    },
+    [getCoordinatorRooms, roomLastActiveAt],
+  );
 
   // Fetch zones on mount
   useEffect(() => {
@@ -70,6 +159,32 @@ export function useSonos() {
     };
   }, [refreshZones]);
 
+  // Auto-join the most recently active coordinator (best-effort).
+  useEffect(() => {
+    if (!zones || zones.length === 0) return;
+    let cancelled = false;
+
+    const run = async (allowAutoSelect) => {
+      try {
+        await scanCoordinatorActivity(zones, { allowAutoSelect });
+      } catch {
+        // ignore
+      }
+    };
+
+    // First run should be allowed to auto-select.
+    run(true);
+
+    const interval = setInterval(() => {
+      if (!cancelled) run(false);
+    }, 15000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [zones, scanCoordinatorActivity]);
+
   useEffect(() => () => {
     if (volumeCommitTimerRef.current) {
       clearTimeout(volumeCommitTimerRef.current);
@@ -83,6 +198,24 @@ export function useSonos() {
     if (Array.isArray(rawQueue?.queue)) return rawQueue.queue;
     if (Array.isArray(rawQueue?.tracks)) return rawQueue.tracks;
     return [];
+  }, []);
+
+  const getQueueStartIndex = useCallback((state, normalizedQueue) => {
+    const q = Array.isArray(normalizedQueue) ? normalizedQueue : [];
+    if (q.length === 0) return 0;
+    const anyState = state && typeof state === 'object' ? state : null;
+
+    const qp = anyState && typeof anyState.queuePosition === 'number' ? anyState.queuePosition : null;
+    if (typeof qp === 'number' && Number.isFinite(qp) && qp >= 0 && qp < q.length) return Math.floor(qp);
+
+    const trackNo = anyState && typeof anyState.trackNo === 'number' ? anyState.trackNo : null;
+    // Some bridges report trackNo as 1-based queue index.
+    if (typeof trackNo === 'number' && Number.isFinite(trackNo)) {
+      const idx = Math.floor(trackNo - 1);
+      if (idx >= 0 && idx < q.length) return idx;
+    }
+
+    return 0;
   }, []);
 
   // Poll player state every 2 seconds when a room is selected
@@ -166,6 +299,9 @@ export function useSonos() {
       clearInterval(interval);
     };
   }, [selectedRoom, normalizeQueue]);
+
+  const queueStartIndex = getQueueStartIndex(playerState, queue);
+  const remainingQueue = Array.isArray(queue) ? queue.slice(queueStartIndex) : [];
 
   // Control functions
   const playRoom = useCallback(async (roomName) => {
@@ -331,7 +467,7 @@ export function useSonos() {
     async (roomName) => {
       const target = currentCoordinator || selectedRoomRef.current || roomName;
       if (!target || roomName === target) {
-        setSelectedRoom(roomName);
+        setSelectedRoomAndPersist(roomName);
         return;
       }
       try {
@@ -341,7 +477,7 @@ export function useSonos() {
         setError('Failed to join room to group');
       }
     },
-    [currentCoordinator, refreshZones],
+    [currentCoordinator, refreshZones, setSelectedRoomAndPersist],
   );
 
   const leaveRoomFromGroup = useCallback(
@@ -350,13 +486,13 @@ export function useSonos() {
         await api.leaveRoom(roomName);
         await refreshZones({ silent: true });
         if (selectedRoomRef.current === roomName) {
-          setSelectedRoom(roomName);
+          setSelectedRoomAndPersist(roomName);
         }
       } catch {
         setError('Failed to remove room from group');
       }
     },
-    [refreshZones],
+    [refreshZones, setSelectedRoomAndPersist],
   );
 
   const roomNames = Array.from(
@@ -379,13 +515,17 @@ export function useSonos() {
     zones,
     roomNames,
     selectedRoom,
-    setSelectedRoom,
+    setSelectedRoom: setSelectedRoomAndPersist,
     playerState,
     volume,
     setVolume,
     favorites,
     playlists,
     queue,
+    remainingQueue,
+    queueStartIndex,
+    roomStates,
+    roomLastActiveAt,
     playNextSupported,
     loading,
     error,

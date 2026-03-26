@@ -1,7 +1,8 @@
 const DEFAULT_BASE_URL = 'http://localhost:5005';
-const BASE_URL = (
-  import.meta.env.VITE_SONOS_API_URL?.trim() || DEFAULT_BASE_URL
-).replace(/\/+$/, '');
+const ENV_URL = (import.meta.env.VITE_SONOS_API_URL?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, '');
+const BASE_URL = window.location.protocol === 'https:'
+  ? `${window.location.origin}/sonos-bridge`
+  : ENV_URL;
 const FORCE_MOCK = String(import.meta.env.VITE_SONOS_FORCE_MOCK || '').toLowerCase() === 'true';
 
 // --- Mock Data ---
@@ -110,6 +111,23 @@ async function apiMutation(path) {
   return response.json();
 }
 
+async function apiMutationTextOk(path) {
+  if (FORCE_MOCK) {
+    return { status: 'mock-ok' };
+  }
+  const response = await fetch(`${BASE_URL}${path}`, { method: 'POST' });
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+  const text = await response.text();
+  if (!text) return { ok: true };
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { ok: true, raw: text };
+  }
+}
+
 async function apiMutationTry(paths) {
   let lastError = null;
   for (const path of paths) {
@@ -175,9 +193,19 @@ export function setVolume(room, level) {
   return apiMutation(`/${encodeURIComponent(room)}/volume/${level}`);
 }
 
+function resolveItemArt(item) {
+  if (!item || typeof item !== 'object') return item;
+  const art = item.albumArtUri || item.albumArtURI;
+  if (art && typeof art === 'string' && art.startsWith('/')) {
+    return { ...item, albumArtUri: `${BASE_URL}${art}` };
+  }
+  return item;
+}
+
 export async function getFavorites(room) {
   try {
     const data = await apiFetch(`/${encodeURIComponent(room)}/favorites`);
+    if (Array.isArray(data)) return data.map(resolveItemArt);
     return data;
   } catch {
     return mockFavorites;
@@ -199,7 +227,9 @@ export function playFavoriteNext(room, name) {
 
 export async function getPlaylists(room) {
   try {
-    return await apiFetch(`/${encodeURIComponent(room)}/playlists`);
+    const data = await apiFetch(`/${encodeURIComponent(room)}/playlists`);
+    if (Array.isArray(data)) return data.map(resolveItemArt);
+    return data;
   } catch {
     return mockPlaylists;
   }
@@ -216,6 +246,53 @@ export function playPlaylistNext(room, name) {
     `/${encodedRoom}/playlist/${encodedName}/next`,
     `/${encodedRoom}/playlist/${encodedName}?action=next`,
   ]);
+}
+
+function normalizeSpotifyTrackRef(trackIdOrUri) {
+  if (typeof trackIdOrUri !== 'string') return null;
+  const trimmed = trackIdOrUri.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('spotify:track:')) return trimmed;
+  // Accept raw ID and convert to URI.
+  return `spotify:track:${trimmed}`;
+}
+
+export async function playSpotifyTrackNow(room, trackIdOrUri) {
+  const roomEnc = encodeURIComponent(room);
+  const trackRef = normalizeSpotifyTrackRef(trackIdOrUri);
+  if (!trackRef) throw new Error('Invalid Spotify track');
+  return apiMutation(`/${roomEnc}/spotify/now/${trackRef}`);
+}
+
+export async function playSpotifyTrackNext(room, trackIdOrUri) {
+  const roomEnc = encodeURIComponent(room);
+  const trackRef = normalizeSpotifyTrackRef(trackIdOrUri);
+  if (!trackRef) throw new Error('Invalid Spotify track');
+  return apiMutation(`/${roomEnc}/spotify/next/${trackRef}`);
+}
+
+export async function queueSpotifyTrack(room, trackIdOrUri) {
+  const roomEnc = encodeURIComponent(room);
+  const trackRef = normalizeSpotifyTrackRef(trackIdOrUri);
+  if (!trackRef) throw new Error('Invalid Spotify track');
+  return apiMutation(`/${roomEnc}/spotify/queue/${trackRef}`);
+}
+
+/** Play any Spotify URI now (track, album, playlist, etc.). Path must use literal colons. */
+export async function playSpotifyUriNow(room, spotifyUri) {
+  const roomEnc = encodeURIComponent(room);
+  if (typeof spotifyUri !== 'string' || !spotifyUri.startsWith('spotify:')) {
+    throw new Error('Invalid Spotify URI');
+  }
+  return apiMutation(`/${roomEnc}/spotify/now/${spotifyUri}`);
+}
+
+export function clearQueue(room) {
+  return apiMutation(`/${encodeURIComponent(room)}/clearqueue`);
+}
+
+export function shuffleOff(room) {
+  return apiMutation(`/${encodeURIComponent(room)}/shuffle/off`);
 }
 
 export function toggleShuffle(room) {

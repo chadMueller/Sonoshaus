@@ -81,7 +81,6 @@ export function RoomVolumeKnob({ value = 0, label, onChange }) {
       <span className="room-volume-knob-face" style={{ transform: `rotate(${angle}deg)` }}>
         <span className="room-volume-knob-indicator" />
       </span>
-      <span className="room-volume-readout">{steppedValue}</span>
     </button>
   );
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 function sourceToItems(source) {
   if (!Array.isArray(source)) return [];
@@ -20,123 +20,73 @@ function sourceToItems(source) {
 }
 
 export function MediaStack({
-  selectedRoom,
-  favorites,
-  playlists,
   queue,
+  queueStartIndex = 0,
   loading,
-  playNextSupported,
-  onPlayFavorite,
-  onPlayPlaylist,
-  onPlayFavoriteNext,
-  onPlayPlaylistNext,
 }) {
-  const [activeTab, setActiveTab] = useState('favorites');
+  const activeTab = 'queue';
 
-  const favoriteItems = useMemo(() => sourceToItems(favorites), [favorites]);
-  const playlistItems = useMemo(() => sourceToItems(playlists), [playlists]);
   const queueItems = useMemo(() => sourceToItems(queue), [queue]);
-  const tabs = useMemo(
-    () => [
-      { key: 'favorites', label: 'Favorites' },
-      { key: 'playlists', label: 'Playlists' },
-      { key: 'queue', label: 'Queue' },
-    ],
-    [],
-  );
-
+  const listRef = useRef(null);
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+  }, [queueStartIndex]);
   const activeItems = useMemo(() => {
     switch (activeTab) {
-      case 'playlists':
-        return playlistItems;
       case 'queue':
-        return queueItems;
-      case 'favorites':
       default:
-        return favoriteItems;
+        return queueItems;
     }
-  }, [activeTab, favoriteItems, playlistItems, queueItems]);
-
-  const handlePlay = (item) => {
-    const value = item.title;
-    if (activeTab === 'favorites') {
-      onPlayFavorite(value);
-      return;
-    }
-    onPlayPlaylist(value);
-  };
-
-  const handlePlayNext = (item) => {
-    const value = item.title;
-    if (activeTab === 'favorites') {
-      onPlayFavoriteNext(value);
-      return;
-    }
-    if (activeTab === 'playlists') {
-      onPlayPlaylistNext(value);
-    }
-  };
+  }, [activeTab, queueItems]);
 
   return (
-    <section className="stack-module">
-      <div className="stack-wood">
-        <div className="stack-faceplate">
-          <div className="stack-header">
-            <div className="stack-title" aria-hidden="true" />
-            <div className="stack-room">{selectedRoom ? `Room: ${selectedRoom}` : 'Select a room'}</div>
-          </div>
+    <section className="stack-module stack-module--queue" aria-label="Queue">
+      <div className="stack-faceplate">
+        <div className="stack-header">
+          <div className="stack-title" aria-hidden="true" />
+          <h2 className="cd-title">Queue</h2>
+        </div>
 
-          <div className="stack-browser">
-            <div className="stack-tabs stack-tabs-vertical">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  className={`stack-tab ${activeTab === tab.key ? 'active' : ''}`}
-                  onClick={() => setActiveTab(tab.key)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            <div className="stack-list">
-              {loading ? (
-                <div className="stack-empty">Working on getting your sonos catalog</div>
-              ) : activeItems.length === 0 ? (
-                <div className="stack-empty">No items found</div>
-              ) : (
-                activeItems.map((item) => (
-                  <button
-                    key={`${activeTab}-${item.title}`}
-                    type="button"
-                    className="stack-item"
-                    onClick={() => handlePlay(item)}
-                    title={item.title}
-                  >
-                    <div className="stack-item-text">
-                      <div className="stack-item-title">{item.title}</div>
-                      {item.subtitle ? <div className="stack-item-subtitle">{item.subtitle}</div> : null}
-                    </div>
-                    <div className="stack-item-actions">
-                      {(activeTab === 'favorites' || activeTab === 'playlists') && (
-                        <button
-                          type="button"
-                          className="stack-inline-action"
-                          disabled={!playNextSupported}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handlePlayNext(item);
-                          }}
-                        >
-                          Next
-                        </button>
-                      )}
-                      <div className="stack-item-action">Play</div>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
+        <div className="stack-browser">
+          <div className="stack-main-column">
+            {activeTab === 'queue' ? (
+              <>
+                <div className="stack-list" ref={listRef}>
+                {loading ? (
+                  <div className="stack-empty">Loading queue…</div>
+                ) : activeItems.length === 0 ? (
+                  <div className="stack-empty">No items found</div>
+                ) : (
+                  activeItems.map((item, index) => (
+                    <button
+                      key={`${activeTab}-${item.title}`}
+                      type="button"
+                      className="stack-item"
+                      title={item.subtitle ? `${item.subtitle} — ${item.title}` : item.title}
+                    >
+                      <div className="stack-item-text">
+                        <div className="stack-item-title stack-item-title--single">
+                          {index === 0 ? <span className="stack-item-now">Now</span> : null}
+                          {item.subtitle ? (
+                            <>
+                              <span className="stack-item-artist">{item.subtitle}</span>
+                              <span className="stack-item-sep" aria-hidden="true">
+                                {' '}
+                                —{' '}
+                              </span>
+                            </>
+                          ) : null}
+                          <span className="stack-item-track">{item.title}</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                )}
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       </div>
