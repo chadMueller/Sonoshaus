@@ -163,6 +163,7 @@ export function SonosReceiverView({ spotifyAuthError }) {
                   queue={sonos.queue}
                   queueStartIndex={sonos.queueStartIndex}
                   queueLoading={sonos.loading}
+                  shuffleOn={shuffleOn}
                 />
               </section>
 

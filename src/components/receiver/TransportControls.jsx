@@ -70,12 +70,6 @@ export function TransportControls({
         onClick={onPlayPause}
       />
       <MachinedButton label="Next" icon={icons.next} onClick={onNext} />
-      <MachinedButton
-        label="Repeat"
-        icon={icons.repeat}
-        onClick={onToggleRepeat}
-        active={!!repeat}
-      />
     </div>
   );
 }

@@ -69,11 +69,13 @@ export function SpotifyAlbumRack({
   const carouselSentinelRef = useRef(null);
   const hasMoreRef = useRef(false);
   const loadingMoreRef = useRef(false);
+  const offsetRef = useRef(0);
   const { clientId } = getSpotifyConfig();
   const [spotifyAuthed, setSpotifyAuthed] = useState(() => isSpotifyAuthed());
 
   hasMoreRef.current = hasMore;
   loadingMoreRef.current = loadingMore;
+  offsetRef.current = offset;
 
   useEffect(() => {
     if (spotifyAuthError) {
@@ -182,10 +184,12 @@ export function SpotifyAlbumRack({
       setError(null);
 
       try {
-        const nextOffset = reset ? 0 : offset;
+        const nextOffset = reset ? 0 : offsetRef.current;
         const res = await getSavedAlbumsPage({ limit: 50, offset: nextOffset });
+        const newOffset = res.offset + res.albums.length;
         setTotal(res.total);
-        setOffset(res.offset + res.albums.length);
+        setOffset(newOffset);
+        offsetRef.current = newOffset;
         setHasMore(!!res.hasMore);
         setAlbums((prev) => (reset ? res.albums : [...prev, ...res.albums]));
         setStatus('ready');
@@ -202,7 +206,7 @@ export function SpotifyAlbumRack({
         fetchInFlightRef.current = false;
       }
     },
-    [offset],
+    [],
   );
 
   useEffect(() => {
@@ -217,6 +221,34 @@ export function SpotifyAlbumRack({
     }
     fetchNextPage({ reset: false });
   }, [fetchNextPage]);
+
+  const loadAllRef = useRef(false);
+
+  const loadAllRemaining = useCallback(async () => {
+    if (loadAllRef.current || fetchInFlightRef.current) return;
+    loadAllRef.current = true;
+    setLoadingMore(true);
+
+    try {
+      while (hasMoreRef.current) {
+        const curOffset = offsetRef.current;
+        const res = await getSavedAlbumsPage({ limit: 50, offset: curOffset });
+        const newOffset = res.offset + res.albums.length;
+        offsetRef.current = newOffset;
+        setOffset(newOffset);
+        setTotal(res.total);
+        setHasMore(!!res.hasMore);
+        hasMoreRef.current = !!res.hasMore;
+        setAlbums((prev) => [...prev, ...res.albums]);
+      }
+    } catch (err) {
+      console.error('[SpotifyAlbumRack] loadAll failed:', err);
+    } finally {
+      setLoadingMore(false);
+      loadAllRef.current = false;
+      fetchInFlightRef.current = false;
+    }
+  }, []);
 
   const scrollToLetter = useCallback(
     (letter) => {
@@ -238,18 +270,15 @@ export function SpotifyAlbumRack({
       if (contentMode !== 'albums') return;
       if (sortMode === 'recent') return;
       if (!letter) return;
-      // If we already have it, just jump.
       if (firstAlbumIdByLetter.has(letter)) {
         scrollToLetter(letter);
         return;
       }
-      // Kick off a “seek”: scroll to end and keep paging until found (or exhausted).
+      // Load all remaining albums, then scroll when the letter appears
       setAlphaSeek({ letter, startedAt: Date.now() });
-      const root = viewMode === 'carousel' ? carouselScrollRef.current : rackScrollRef.current;
-      if (root) root.scrollTo({ left: root.scrollWidth, behavior: 'smooth' });
-      tryFetchMore();
+      loadAllRemaining();
     },
-    [contentMode, sortMode, firstAlbumIdByLetter, scrollToLetter, viewMode, tryFetchMore],
+    [contentMode, sortMode, firstAlbumIdByLetter, scrollToLetter, loadAllRemaining],
   );
 
   useEffect(() => {
@@ -276,9 +305,9 @@ export function SpotifyAlbumRack({
       return;
     }
 
-    const t = setTimeout(() => tryFetchMore(), 250);
+    const t = setTimeout(() => tryFetchMore(), 150);
     return () => clearTimeout(t);
-  }, [alphaSeek, contentMode, sortMode, firstAlbumIdByLetter, scrollToLetter, tryFetchMore]);
+  }, [alphaSeek, contentMode, sortMode, firstAlbumIdByLetter, scrollToLetter, tryFetchMore, albums.length]);
 
   useEffect(() => {
     if (contentMode !== 'albums') return;
@@ -291,7 +320,7 @@ export function SpotifyAlbumRack({
       (entries) => {
         if (entries[0]?.isIntersecting) tryFetchMore();
       },
-      { root, rootMargin: '400px 0px', threshold: 0 },
+      { root, rootMargin: '0px 600px 0px 0px', threshold: 0 },
     );
     obs.observe(target);
     return () => obs.disconnect();
@@ -308,11 +337,20 @@ export function SpotifyAlbumRack({
       (entries) => {
         if (entries[0]?.isIntersecting) tryFetchMore();
       },
-      { root, rootMargin: '400px 0px', threshold: 0 },
+      { root, rootMargin: '0px 600px 0px 0px', threshold: 0 },
     );
     obs.observe(target);
     return () => obs.disconnect();
   }, [viewMode, tryFetchMore, albums.length, hasMore]);
+
+  // When user starts searching, load all remaining albums so search covers the full library
+  useEffect(() => {
+    if (contentMode !== 'albums') return;
+    if (!query.trim()) return;
+    if (!hasMoreRef.current) return;
+
+    loadAllRemaining();
+  }, [contentMode, query, loadAllRemaining]);
 
   const handleConnect = async () => {
     setError(null);
@@ -448,7 +486,17 @@ export function SpotifyAlbumRack({
       >
         <div className="cd-cover">
           {art ? (
-            <img className="cd-cover-img" src={art} alt="" loading="lazy" />
+            <>
+              <img className="cd-cover-img" src={art} alt="" loading="lazy" />
+              {contentMode === 'albums' ? (
+                <div className="cd-overlay">
+                  <div className="cd-overlay-text">
+                    <span className="cd-overlay-title">{title}</span>
+                    <span className="cd-overlay-artist">{artist}</span>
+                  </div>
+                </div>
+              ) : null}
+            </>
           ) : (
             <div className="cd-cover-fallback" aria-hidden="true">
               <span className="cd-cover-fallback-name">{album.name}</span>

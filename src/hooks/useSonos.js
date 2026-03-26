@@ -397,6 +397,8 @@ export function useSonos() {
     if (!selectedRoom) return;
     try {
       await api.toggleShuffle(selectedRoom);
+      const state = await api.getState(selectedRoom);
+      if (state) setPlayerState(state);
     } catch {
       setError('Shuffle command failed');
     }
@@ -406,6 +408,8 @@ export function useSonos() {
     if (!selectedRoom) return;
     try {
       await api.toggleRepeat(selectedRoom);
+      const state = await api.getState(selectedRoom);
+      if (state) setPlayerState(state);
     } catch {
       setError('Repeat command failed');
     }

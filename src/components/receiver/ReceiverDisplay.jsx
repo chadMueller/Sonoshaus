@@ -39,6 +39,7 @@ export function ReceiverDisplay({
   queue = [],
   queueStartIndex = 0,
   queueLoading,
+  shuffleOn,
 }) {
   const [showQueue, setShowQueue] = useState(false);
   const rawTitle = currentTrack?.title || (loading ? 'Loading Track...' : 'No Track Selected');
@@ -88,15 +89,18 @@ export function ReceiverDisplay({
 
   return (
     <div className="display-window">
-      <button
-        type="button"
-        className={`receiver-queue-toggle ${showQueue ? 'active' : ''}`}
-        onClick={() => setShowQueue((v) => !v)}
-        aria-pressed={showQueue}
-        aria-label={showQueue ? 'Show now playing' : 'Show queue'}
-      >
-        Queue
-      </button>
+      <div className="receiver-display-toggles">
+        {shuffleOn ? <span className="receiver-shuffle-badge">Shuffle</span> : null}
+        <button
+          type="button"
+          className={`receiver-queue-toggle ${showQueue ? 'active' : ''}`}
+          onClick={() => setShowQueue((v) => !v)}
+          aria-pressed={showQueue}
+          aria-label={showQueue ? 'Show now playing' : 'Show queue'}
+        >
+          Queue
+        </button>
+      </div>
 
       {showQueue ? (
         <div className="receiver-queue-inline">

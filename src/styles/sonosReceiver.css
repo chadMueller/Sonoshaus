@@ -567,10 +567,26 @@
   align-items: center;
 }
 
-.receiver-queue-toggle {
+.receiver-display-toggles {
   position: absolute;
   top: 10px;
   right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 2;
+}
+
+.receiver-shuffle-badge {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: rgba(229, 141, 61, 0.75);
+  text-shadow: 0 0 6px rgba(229, 141, 61, 0.25);
+}
+
+.receiver-queue-toggle {
   border: none;
   background: transparent;
   font-family: var(--font-mono);
@@ -580,7 +596,6 @@
   color: rgba(229, 141, 61, 0.65);
   cursor: pointer;
   text-shadow: 0 0 10px rgba(229, 141, 61, 0.25);
-  z-index: 2;
 }
 
 .receiver-queue-toggle:hover {
@@ -994,9 +1009,17 @@
   filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.6));
 }
 
+.machined-button--active {
+  background: linear-gradient(to bottom, #5a4f45, #3a322b);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    inset 0 2px 4px rgba(0, 0, 0, 0.4),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+}
+
 .machined-button--active svg {
-  fill: var(--amber-dim);
-  filter: drop-shadow(0 0 4px rgba(229, 141, 61, 0.65));
+  fill: #fff;
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.3));
 }
 
 .volume-container {
@@ -2542,7 +2565,7 @@
 
 .cd-case:hover .cd-overlay,
 .cd-carousel-item:hover .cd-overlay {
-  opacity: 0;
+  opacity: 1;
 }
 
 .cd-overlay-text {
