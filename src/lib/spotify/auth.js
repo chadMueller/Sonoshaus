@@ -7,6 +7,15 @@ const STORAGE_KEY = 'sonohaus.spotify.tokens.v1';
 const VERIFIER_KEY = 'sonohaus.spotify.pkce.verifier.v1';
 const STATE_KEY = 'sonohaus.spotify.pkce.state.v1';
 
+const OAUTH_PORT = 38901;
+const ELECTRON_REDIRECT_URI = `http://localhost:${OAUTH_PORT}/callback`;
+
+export const SPOTIFY_AUTH_SUCCESS_EVENT = 'sonohaus:spotify-auth-success';
+
+function isElectron() {
+  return !!window.sonohaus?.isElectron;
+}
+
 function nowSeconds() {
   return Math.floor(Date.now() / 1000);
 }
@@ -26,9 +35,15 @@ export function getSpotifyConfig() {
   const clientId =
     localStorage.getItem(CLIENT_ID_STORAGE_KEY)?.trim() ||
     String(import.meta.env.VITE_SPOTIFY_CLIENT_ID || '').trim();
-  const redirectUri =
-    String(import.meta.env.VITE_SPOTIFY_REDIRECT_URI || '').trim() ||
-    `${window.location.origin}${window.location.pathname}`;
+
+  let redirectUri;
+  if (isElectron()) {
+    redirectUri = ELECTRON_REDIRECT_URI;
+  } else {
+    redirectUri =
+      String(import.meta.env.VITE_SPOTIFY_REDIRECT_URI || '').trim() ||
+      `${window.location.origin}${window.location.pathname}`;
+  }
 
   return { clientId, redirectUri };
 }
@@ -79,12 +94,6 @@ export async function startSpotifyLogin({ scopes = ['user-library-read'] } = {})
   const { clientId, redirectUri } = getSpotifyConfig();
   if (!clientId) throw new Error('Missing VITE_SPOTIFY_CLIENT_ID');
 
-  if (window.location.protocol === 'file:') {
-    throw new Error(
-      'Spotify auth requires http:// or https:// (not file://). Run `npm run dev` and open the app at the same URL as your Spotify redirect (often http://<LAN-IP>:3000/).'
-    );
-  }
-
   const verifier = createRandomVerifier(64);
   const challenge = await createCodeChallenge(verifier);
   const stateBytes = new Uint8Array(16);
@@ -106,7 +115,58 @@ export async function startSpotifyLogin({ scopes = ['user-library-read'] } = {})
     scope: scopes.join(' '),
   });
 
-  window.location.assign(`${AUTH_URL}?${params.toString()}`);
+  const authUrl = `${AUTH_URL}?${params.toString()}`;
+
+  if (isElectron()) {
+    await startSpotifyLoginElectron(authUrl, state);
+  } else {
+    if (window.location.protocol === 'file:') {
+      throw new Error(
+        'Spotify auth requires http:// or https:// (not file://). Run via Electron or `npm run dev`.'
+      );
+    }
+    window.location.assign(authUrl);
+  }
+}
+
+async function startSpotifyLoginElectron(authUrl, expectedState) {
+  const sonohaus = window.sonohaus;
+
+  await sonohaus.startOAuthServer(OAUTH_PORT);
+
+  const removeListener = sonohaus.onOAuthCode(async (data) => {
+    removeListener();
+
+    try {
+      if (data.error) {
+        throw new Error(`Spotify auth error: ${data.error}`);
+      }
+
+      if (!data.code) {
+        throw new Error('No authorization code received from Spotify.');
+      }
+
+      if (!data.state || data.state !== expectedState) {
+        throw new Error('Spotify auth state mismatch. Please try again.');
+      }
+
+      await exchangeCodeForTokens(data.code);
+
+      sessionStorage.removeItem(VERIFIER_KEY);
+      sessionStorage.removeItem(STATE_KEY);
+
+      window.dispatchEvent(new CustomEvent(SPOTIFY_AUTH_SUCCESS_EVENT));
+    } catch (err) {
+      console.error('[spotify/auth] Electron OAuth error:', err);
+      window.dispatchEvent(
+        new CustomEvent(SPOTIFY_AUTH_SUCCESS_EVENT, { detail: { error: err.message } })
+      );
+    } finally {
+      sonohaus.stopOAuthServer();
+    }
+  });
+
+  await sonohaus.openExternal(authUrl);
 }
 
 async function exchangeCodeForTokens(code) {

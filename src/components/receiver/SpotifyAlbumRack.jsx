@@ -6,6 +6,7 @@ import {
   isSpotifyAuthed,
   setSpotifyClientId,
   getStoredClientId,
+  SPOTIFY_AUTH_SUCCESS_EVENT,
 } from '../../lib/spotify/auth.js';
 import { getAlbumTracksAll, getSavedAlbumsPage } from '../../lib/spotify/api.js';
 import { clearQueue, playSpotifyTrackNow, queueSpotifyTrack, shuffleOff } from '../../api/sonos.js';
@@ -21,6 +22,7 @@ function sleep(ms) {
 }
 
 function canUseSpotify() {
+  if (window.sonohaus?.isElectron) return true;
   return window.location.protocol !== 'file:';
 }
 
@@ -218,6 +220,22 @@ export function SpotifyAlbumRack({
     fetchNextPage({ reset: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
+
+  // Listen for Electron OAuth success
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.error) {
+        setError(e.detail.error);
+        setStatus('error');
+        return;
+      }
+      setSpotifyAuthed(true);
+      setError(null);
+      fetchNextPage({ reset: true });
+    };
+    window.addEventListener(SPOTIFY_AUTH_SUCCESS_EVENT, handler);
+    return () => window.removeEventListener(SPOTIFY_AUTH_SUCCESS_EVENT, handler);
+  }, [fetchNextPage]);
 
   const tryFetchMore = useCallback(() => {
     if (!hasMoreRef.current || loadingMoreRef.current || fetchInFlightRef.current) {
@@ -655,7 +673,7 @@ export function SpotifyAlbumRack({
           <div className="cd-spotify-setup">
             <div className="cd-spotify-setup-steps">
               <p>1. Go to developer.spotify.com/dashboard and create an app</p>
-              <p>2. Add this redirect URI: <strong>{window.location.origin}/</strong></p>
+              <p>2. Add this redirect URI: <strong>{canUseSpotify() && window.sonohaus?.isElectron ? 'http://localhost:38901/callback' : `${window.location.origin}/`}</strong></p>
               <p>3. Copy your Client ID and paste it below</p>
             </div>
             <div className="cd-spotify-setup-input">
