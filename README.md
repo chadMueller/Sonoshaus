@@ -2,15 +2,17 @@
 
 A retro stereo receiver UI for controlling Sonos speakers on your home network.
 
-## Install (macOS)
+## Quick Start
 
-Two things to install: the **bridge** (talks to your Sonos speakers) and the **app** (the UI).
+You need two things: a **bridge** (background service that talks to your Sonos) and the **app** (the UI).
 
-### 1. Install the Sonos bridge
+### Requirements
 
-The bridge is a small background service that discovers and controls your Sonos speakers. It runs on the same Mac as the app.
+- macOS (Apple Silicon)
+- [Node.js](https://nodejs.org) v18 or later
+- Sonos speakers on your local network
 
-**Requires [Node.js](https://nodejs.org) (v18 or later).**
+### Step 1: Install the bridge
 
 ```bash
 git clone https://github.com/chadMueller/Sonoshaus.git
@@ -18,50 +20,56 @@ cd Sonoshaus
 ./scripts/install-bridge.command
 ```
 
-Or just double-click `scripts/install-bridge.command` in Finder.
+Or double-click `scripts/install-bridge.command` in Finder. It will download the Sonos bridge, install it, and set it to start automatically when you log in. You only do this once.
 
-The installer will:
-- Download the Sonos bridge
-- Install its dependencies
-- Set it up to start automatically when you log in
-- Verify it found your speakers
+### Step 2: Install the app
 
-Once installed, the bridge runs in the background on `localhost:5005`. You don't need to think about it again.
-
-**To uninstall:** double-click `scripts/uninstall-bridge.command`.
-
-### 2. Install the Sonohaus app
-
-1. Download **Sonohaus-x.x.x-arm64.dmg** from the [Releases page](../../releases)
+1. Download the latest `.dmg` from the [Releases page](../../releases)
 2. Open the disk image, drag **Sonohaus** into **Applications**
-3. If macOS blocks the app, go to **System Settings > Privacy & Security** and click **Open Anyway**, or right-click the app and choose **Open**
-4. Launch the app. Your Sonos speakers should appear within a few seconds.
+3. If macOS blocks the app: **System Settings > Privacy & Security > Open Anyway**
+4. Open the app. Your speakers should appear within a few seconds.
+
+### Step 3: Connect Spotify (optional)
+
+Spotify lets you browse your saved albums and queue them to Sonos. Setup takes about 2 minutes.
+
+1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and create an app
+2. Add this redirect URI: `https://sonos-ten.vercel.app/callback/`
+3. Copy your **Client ID**
+4. Set up the web UI:
+   ```bash
+   cd Sonoshaus
+   cp .env.example .env
+   ```
+5. Edit `.env` and paste your Client ID as `VITE_SPOTIFY_CLIENT_ID`
+6. Start the web UI:
+   ```bash
+   npm install
+   npm run dev
+   ```
+7. Open `http://localhost:3000` in your browser
+8. Click **Connect** in the Library section and sign in with Spotify
+9. Once connected, close the web UI. Open the Sonohaus app from Applications -- your albums will be there.
+
+The Spotify connection syncs automatically between the web UI and the app. You only need to connect once.
 
 ## How it works
 
 ```
-Sonohaus app  --HTTP-->  bridge (localhost:5005)  --LAN-->  Sonos speakers
+Sonohaus app  -->  bridge (localhost:5005)  -->  Sonos speakers
 ```
 
-The bridge ([node-sonos-http-api](https://github.com/jishi/node-sonos-http-api)) translates HTTP calls into the protocol Sonos speakers understand. The Sonohaus app is just a UI that talks to the bridge.
+The bridge ([node-sonos-http-api](https://github.com/jishi/node-sonos-http-api)) runs in the background and translates HTTP calls into the protocol Sonos speakers understand. The Sonohaus app is a UI that talks to the bridge.
 
-## Spotify album browsing (optional)
+For Spotify, a small token server (`localhost:38901`) shares your Spotify session between the web UI and the desktop app. Both are installed by the bridge installer script.
 
-Browse your saved Spotify albums and queue them directly to Sonos. This feature currently works in the **web version** (`npm run dev`), not the packaged DMG app.
+## Uninstall
 
-### Setup
+Double-click `scripts/uninstall-bridge.command` to remove the bridge and token server.
 
-1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and create an app
-2. Under **Redirect URIs**, add the URL you use to open Sonohaus (e.g. `http://localhost:3000/` or `http://192.168.x.x:3000/`)
-3. Copy your **Client ID**
-4. In Sonohaus, go to the Library rack and enter your Client ID in the setup panel
-5. Click **Connect** to sign in with Spotify
-
-No client secret is needed (OAuth PKCE). Your Client ID is stored locally and never sent anywhere except Spotify.
+To remove the app, drag Sonohaus out of Applications.
 
 ## Development
-
-### Quick start
 
 ```bash
 cp .env.example .env
@@ -69,35 +77,17 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. Make sure the bridge is running on `localhost:5005` (either via the installer above or manually).
-
-### Scripts
+Open `http://localhost:3000`. Bridge must be running on `localhost:5005`.
 
 | Command | Purpose |
 |---------|---------|
 | `npm run dev` | Vite dev server with hot reload |
 | `npm run build` | Production build to `dist/` |
-| `npm run preview` | Preview the production build |
-| `npm run desktop:dev` | Vite + Electron for desktop development |
 | `npm run desktop:build` | Build + package as macOS DMG |
 
-### Building the macOS app
+## Kiosk mode
 
-```bash
-npm run desktop:build
-```
-
-The DMG lands in `release/`. Upload it to a GitHub Release:
-
-```bash
-gh release create v0.4.0 release/Sonohaus-0.4.0-arm64.dmg --title "v0.4.0" --notes "Release notes"
-```
-
-**Intel Macs:** In `package.json` under `build.mac.target`, change `arch` to `["x64"]` or `["x64", "arm64"]`.
-
-## Kiosk mode (optional)
-
-For wall-mounted tablets or dedicated displays:
+For wall-mounted tablets or dedicated displays, add to `.env`:
 
 ```dotenv
 VITE_KIOSK_FULLSCREEN=true
@@ -106,13 +96,11 @@ VITE_KIOSK_IDLE_MINUTES=45
 
 ## Mac mini setup
 
-For a dedicated Sonos controller on a Mac mini:
+For a dedicated always-on Sonos controller:
 
 ```bash
 ./ops/mini/install.sh
 ```
-
-Installs LaunchAgents for the bridge and UI with desktop shortcuts. See `ops/mini/install.sh` for details.
 
 ## License
 
