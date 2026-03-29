@@ -7,10 +7,15 @@ set -euo pipefail
 # Double-click this file to run.
 # ============================================================================
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BRIDGE_DIR="$HOME/Library/Application Support/Sonohaus/bridge"
 BRIDGE_REPO="https://github.com/jishi/node-sonos-http-api.git"
 LABEL="com.sonohaus.bridge"
 PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
+TOKEN_LABEL="com.sonohaus.token-server"
+TOKEN_PLIST="$HOME/Library/LaunchAgents/${TOKEN_LABEL}.plist"
+TOKEN_SERVER_SRC="${SCRIPT_DIR}/token-server.cjs"
+TOKEN_SERVER_DEST="$HOME/Library/Application Support/Sonohaus/token-server.cjs"
 LOG_DIR="$HOME/Library/Logs/Sonohaus"
 
 echo ""
@@ -119,6 +124,36 @@ EOF
 # --- Start the bridge ---
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
 echo "  Bridge installed and starting..."
+
+# --- Token sync server (shares Spotify auth between web UI and DMG) ---
+echo "  Setting up token sync server..."
+cp "$TOKEN_SERVER_SRC" "$TOKEN_SERVER_DEST"
+
+cat > "$TOKEN_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${TOKEN_LABEL}</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${NODE_BIN}</string>
+    <string>${TOKEN_SERVER_DEST}</string>
+  </array>
+  <key>StandardOutPath</key>
+  <string>${LOG_DIR}/token-server.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>${LOG_DIR}/token-server.err.log</string>
+</dict>
+</plist>
+EOF
+
+launchctl bootstrap "gui/$(id -u)" "$TOKEN_PLIST"
 echo ""
 
 # --- Verify ---
@@ -138,5 +173,9 @@ fi
 echo ""
 echo "  The bridge will start automatically when you log in."
 echo "  Open the Sonohaus app and your speakers should appear."
+echo ""
+echo "  To connect Spotify, open the web UI:"
+echo "    npm run dev   (from the Sonoshaus directory)"
+echo "    then visit http://localhost:3000"
 echo ""
 read -n 1 -s -r -p "  Press any key to close..."

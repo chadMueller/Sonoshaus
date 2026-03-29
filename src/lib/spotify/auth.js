@@ -7,14 +7,9 @@ const STORAGE_KEY = 'sonohaus.spotify.tokens.v1';
 const VERIFIER_KEY = 'sonohaus.spotify.pkce.verifier.v1';
 const STATE_KEY = 'sonohaus.spotify.pkce.state.v1';
 
-const OAUTH_PORT = 38901;
-const ELECTRON_REDIRECT_URI = `http://localhost:${OAUTH_PORT}/callback`;
+const TOKEN_SYNC_URL = 'http://localhost:38901/tokens';
 
 export const SPOTIFY_AUTH_SUCCESS_EVENT = 'sonohaus:spotify-auth-success';
-
-function isElectron() {
-  return !!window.sonohaus?.isElectron;
-}
 
 function nowSeconds() {
   return Math.floor(Date.now() / 1000);
@@ -36,14 +31,9 @@ export function getSpotifyConfig() {
     localStorage.getItem(CLIENT_ID_STORAGE_KEY)?.trim() ||
     String(import.meta.env.VITE_SPOTIFY_CLIENT_ID || '').trim();
 
-  let redirectUri;
-  if (isElectron()) {
-    redirectUri = ELECTRON_REDIRECT_URI;
-  } else {
-    redirectUri =
-      String(import.meta.env.VITE_SPOTIFY_REDIRECT_URI || '').trim() ||
-      `${window.location.origin}${window.location.pathname}`;
-  }
+  const redirectUri =
+    String(import.meta.env.VITE_SPOTIFY_REDIRECT_URI || '').trim() ||
+    `${window.location.origin}${window.location.pathname}`;
 
   return { clientId, redirectUri };
 }
@@ -83,7 +73,36 @@ function storeTokens({ access_token, refresh_token, expires_in, scope, token_typ
     expires_at: expiresAt,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  syncTokensToServer(payload);
   return payload;
+}
+
+// Sync tokens to the shared file via the token-sync server
+function syncTokensToServer(payload) {
+  const clientId = getStoredClientId();
+  const data = { tokens: payload, clientId };
+  fetch(TOKEN_SYNC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }).catch(() => {});
+}
+
+// Pull tokens from the shared file (for DMG app or fresh browser)
+export async function loadSharedTokens() {
+  try {
+    const res = await fetch(TOKEN_SYNC_URL);
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (!data.tokens?.access_token) return false;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data.tokens));
+    if (data.clientId) {
+      setSpotifyClientId(data.clientId);
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function isSpotifyAuthed() {
@@ -117,56 +136,12 @@ export async function startSpotifyLogin({ scopes = ['user-library-read'] } = {})
 
   const authUrl = `${AUTH_URL}?${params.toString()}`;
 
-  if (isElectron()) {
-    await startSpotifyLoginElectron(authUrl, state);
-  } else {
-    if (window.location.protocol === 'file:') {
-      throw new Error(
-        'Spotify auth requires http:// or https:// (not file://). Run via Electron or `npm run dev`.'
-      );
-    }
-    window.location.assign(authUrl);
+  if (window.location.protocol === 'file:') {
+    throw new Error(
+      'Connect Spotify from the web UI at http://localhost:3003 first. The DMG will pick up the connection automatically.'
+    );
   }
-}
-
-async function startSpotifyLoginElectron(authUrl, expectedState) {
-  const sonohaus = window.sonohaus;
-
-  await sonohaus.startOAuthServer(OAUTH_PORT);
-
-  const removeListener = sonohaus.onOAuthCode(async (data) => {
-    removeListener();
-
-    try {
-      if (data.error) {
-        throw new Error(`Spotify auth error: ${data.error}`);
-      }
-
-      if (!data.code) {
-        throw new Error('No authorization code received from Spotify.');
-      }
-
-      if (!data.state || data.state !== expectedState) {
-        throw new Error('Spotify auth state mismatch. Please try again.');
-      }
-
-      await exchangeCodeForTokens(data.code);
-
-      sessionStorage.removeItem(VERIFIER_KEY);
-      sessionStorage.removeItem(STATE_KEY);
-
-      window.dispatchEvent(new CustomEvent(SPOTIFY_AUTH_SUCCESS_EVENT));
-    } catch (err) {
-      console.error('[spotify/auth] Electron OAuth error:', err);
-      window.dispatchEvent(
-        new CustomEvent(SPOTIFY_AUTH_SUCCESS_EVENT, { detail: { error: err.message } })
-      );
-    } finally {
-      sonohaus.stopOAuthServer();
-    }
-  });
-
-  await sonohaus.openExternal(authUrl);
+  window.location.assign(authUrl);
 }
 
 async function exchangeCodeForTokens(code) {

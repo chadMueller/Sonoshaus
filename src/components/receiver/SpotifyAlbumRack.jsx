@@ -6,6 +6,7 @@ import {
   isSpotifyAuthed,
   setSpotifyClientId,
   getStoredClientId,
+  loadSharedTokens,
   SPOTIFY_AUTH_SUCCESS_EVENT,
 } from '../../lib/spotify/auth.js';
 import { getAlbumTracksAll, getSavedAlbumsPage } from '../../lib/spotify/api.js';
@@ -22,8 +23,7 @@ function sleep(ms) {
 }
 
 function canUseSpotify() {
-  if (window.sonohaus?.isElectron) return true;
-  return window.location.protocol !== 'file:';
+  return true;
 }
 
 function truncate(value, maxChars) {
@@ -89,6 +89,15 @@ export function SpotifyAlbumRack({
       setStatus('error');
     }
   }, [spotifyAuthError]);
+
+  // On mount, try loading shared tokens from the token-sync server
+  // (covers DMG app picking up tokens from web UI auth)
+  useEffect(() => {
+    if (isSpotifyAuthed()) return;
+    loadSharedTokens().then((loaded) => {
+      if (loaded) setSpotifyAuthed(true);
+    });
+  }, []);
 
   useEffect(() => {
     setSpotifyAuthed(isSpotifyAuthed());
