@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head><title>Sonohaus</title></head>
+<body>
+<script>
+// Spotify redirects here with ?code=...&state=...
+// We redirect to localhost so the local app picks it up.
+var params = window.location.search;
+if (params) {
+  window.location.replace('http://localhost:3000/' + params);
+} else {
+  document.body.textContent = 'Missing callback parameters.';
+}
+</script>
+</body>
+</html>
