@@ -79,7 +79,7 @@ function storeTokens({ access_token, refresh_token, expires_in, scope, token_typ
 
 // Sync tokens to the shared file via the token-sync server
 function syncTokensToServer(payload) {
-  const clientId = getStoredClientId();
+  const { clientId } = getSpotifyConfig();
   const data = { tokens: payload, clientId };
   fetch(TOKEN_SYNC_URL, {
     method: 'POST',
