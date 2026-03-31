@@ -35,12 +35,14 @@ export function useSonos() {
   const [error, setError] = useState(null);
   const [roomStates, setRoomStates] = useState({});
   const [roomLastActiveAt, setRoomLastActiveAt] = useState({});
+  const [roomVolumeOverrides, setRoomVolumeOverrides] = useState({});
 
   const selectedRoomRef = useRef(selectedRoom);
   selectedRoomRef.current = selectedRoom;
   const userSelectedRoomRef = useRef(false);
   const volumeCommitTimerRef = useRef(null);
   const roomVolumeTimersRef = useRef({});
+  const roomVolumeLastSentRef = useRef({});
 
   const getRoomNamesFromZone = useCallback((zone) => {
     const members = Array.isArray(zone?.members)
@@ -382,6 +384,10 @@ export function useSonos() {
           const roomName = member?.roomName;
           const memberVolume = member?.state?.volume;
           if (!roomName || typeof memberVolume !== 'number') return null;
+          const override = roomVolumeOverrides?.[roomName];
+          if (override && typeof override.value === 'number' && override.expiresAt > Date.now()) {
+            return [roomName, Math.max(0, Math.min(100, Math.round(override.value)))];
+          }
           return [roomName, Math.max(0, Math.min(100, Math.round(memberVolume)))];
         })
         .filter(Boolean);
@@ -391,10 +397,20 @@ export function useSonos() {
   const setRoomVolume = useCallback((roomName, level) => {
     if (!roomName) return;
     const clamped = Math.max(0, Math.min(100, Math.round(level)));
+
+    // Keep the UI responsive while dragging; polling may lag behind.
+    setRoomVolumeOverrides((prev) => ({
+      ...prev,
+      [roomName]: { value: clamped, expiresAt: Date.now() + 1800 },
+    }));
+
     if (roomVolumeTimersRef.current[roomName]) {
       clearTimeout(roomVolumeTimersRef.current[roomName]);
     }
     roomVolumeTimersRef.current[roomName] = setTimeout(async () => {
+      const last = roomVolumeLastSentRef.current[roomName];
+      if (typeof last === 'number' && last === clamped) return;
+      roomVolumeLastSentRef.current[roomName] = clamped;
       try {
         await api.setVolume(roomName, clamped);
         await refreshZones({ silent: true });
@@ -404,7 +420,7 @@ export function useSonos() {
       } catch {
         setError(`Failed to set volume for ${roomName}`);
       }
-    }, 90);
+    }, 220);
   }, [refreshZones]);
 
   const toggleShuffle = useCallback(async () => {

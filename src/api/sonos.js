@@ -199,6 +199,29 @@ async function apiMutation(path) {
   return response.json();
 }
 
+async function apiMutationWithMethod(path, method) {
+  if (FORCE_MOCK) {
+    return { status: 'mock-ok' };
+  }
+  const base = baseUrlForRequest();
+  let response;
+  try {
+    response = await fetch(`${base}${path}`, { method });
+  } catch (err) {
+    throw new BridgeUnreachableError(`Cannot reach Sonos bridge at ${base}.`, err);
+  }
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+  const text = await response.text();
+  if (!text) return { ok: true };
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { ok: true, raw: text };
+  }
+}
+
 async function apiMutationTextOk(path) {
   if (FORCE_MOCK) {
     return { status: 'mock-ok' };
@@ -287,7 +310,25 @@ export function previous(room) {
 }
 
 export function setVolume(room, level) {
-  return apiMutation(`/${encodeURIComponent(room)}/volume/${level}`);
+  const roomEnc = encodeURIComponent(room);
+  const path = `/${roomEnc}/volume/${level}`;
+  const candidates = [
+    () => apiMutation(path), // GET
+    () => apiMutationWithMethod(path, 'POST'),
+    () => apiMutation(`${path}?timeout=0`), // GET variant
+  ];
+  return (async () => {
+    let lastError = null;
+    for (const attempt of candidates) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        return await attempt();
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError || new Error('Failed to set volume');
+  })();
 }
 
 function resolveItemArt(item) {
