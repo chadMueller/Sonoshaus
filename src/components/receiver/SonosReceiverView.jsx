@@ -66,13 +66,8 @@ export function SonosReceiverView({ spotifyAuthError }) {
         : isMockModeEnabled()
           ? ['Living Room', 'Kitchen', 'Office', 'Bedroom', 'Patio', 'Den', 'Dining', 'Gym']
           : [];
-    names.forEach((name) => {
-      if (!roomOrderRef.current.has(name)) {
-        roomOrderRef.current.set(name, roomOrderRef.current.size);
-      }
-    });
     return [...names]
-      .sort((a, b) => (roomOrderRef.current.get(a) ?? 0) - (roomOrderRef.current.get(b) ?? 0))
+      .sort((a, b) => String(a).localeCompare(String(b)))
       .map((name) => ({ key: name, label: name }));
   }, [sonos.roomNames]);
 

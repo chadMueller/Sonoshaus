@@ -134,13 +134,21 @@ export function useSonos() {
       if (!allowAutoSelect) return;
       if (userSelectedRoomRef.current) return;
 
-      // Choose most recently active; if none playing, fall back to last selected.
+      // Prefer last used room (from this app) if it still exists.
       const lastSelected = safeLoadLastSelectedRoom();
+      if (lastSelected && coordinators.includes(lastSelected)) {
+        if (lastSelected !== selectedRoomRef.current) {
+          setSelectedRoom(lastSelected);
+        }
+        return;
+      }
+
+      // Otherwise choose most recently active; if none playing, fall back to first coordinator.
       const activityPairs = results
         .map((r) => [r.roomName, roomLastActiveAt[r.roomName] || 0, r.state?.playbackState])
         .sort((a, b) => b[1] - a[1]);
       const bestActive = activityPairs.find((p) => p[1] > 0 && p[2] === 'PLAYING')?.[0] || activityPairs[0]?.[0] || null;
-      const target = bestActive || lastSelected || coordinators[0] || null;
+      const target = bestActive || coordinators[0] || null;
       if (target && target !== selectedRoomRef.current) {
         setSelectedRoom(target);
       }
