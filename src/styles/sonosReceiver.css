@@ -1352,7 +1352,31 @@
 }
 
 .room-volume-readout {
-  display: none;
+  position: absolute;
+  right: -6px;
+  bottom: -10px;
+  min-width: 24px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  transform: translateY(6px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.35);
+  text-align: center;
+}
+
+.room-volume-knob.dragging .room-volume-readout,
+.room-volume-knob:focus-visible .room-volume-readout {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .section-room-toggles::before {
