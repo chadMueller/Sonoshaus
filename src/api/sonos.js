@@ -1,11 +1,73 @@
 const DEFAULT_BASE_URL = 'http://localhost:5005';
 const ENV_URL = (import.meta.env.VITE_SONOS_API_URL?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, '');
-const BASE_URL = window.location.protocol === 'https:'
-  ? `${window.location.origin}/sonos-bridge`
-  : ENV_URL;
 const FORCE_MOCK = String(import.meta.env.VITE_SONOS_FORCE_MOCK || '').toLowerCase() === 'true';
 
-// --- Mock Data ---
+/** localStorage override for bridge URL (set from Bridge Setup Wizard). */
+export const BRIDGE_URL_STORAGE_KEY = 'sonohaus.bridgeBaseUrl.v1';
+
+function envBaseUrl() {
+  if (typeof window === 'undefined') return ENV_URL;
+  return window.location.protocol === 'https:'
+    ? `${window.location.origin}/sonos-bridge`
+    : ENV_URL;
+}
+
+/**
+ * Effective bridge base URL: optional localStorage override, else env / HTTPS proxy.
+ */
+export function getEffectiveBridgeBaseUrl() {
+  if (typeof window === 'undefined') return ENV_URL;
+  try {
+    const stored = localStorage.getItem(BRIDGE_URL_STORAGE_KEY);
+    if (stored && /^https?:\/\//i.test(stored.trim())) {
+      return stored.trim().replace(/\/+$/, '');
+    }
+  } catch {
+    // ignore
+  }
+  return envBaseUrl();
+}
+
+export function setBridgeBaseUrlOverride(url) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!url || !String(url).trim()) {
+      localStorage.removeItem(BRIDGE_URL_STORAGE_KEY);
+      return;
+    }
+    const trimmed = String(url).trim().replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(trimmed)) {
+      throw new Error('URL must start with http:// or https://');
+    }
+    localStorage.setItem(BRIDGE_URL_STORAGE_KEY, trimmed);
+  } catch (e) {
+    throw e instanceof Error ? e : new Error(String(e));
+  }
+}
+
+export function clearBridgeBaseUrlOverride() {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(BRIDGE_URL_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export function isMockModeEnabled() {
+  return FORCE_MOCK;
+}
+
+export class BridgeUnreachableError extends Error {
+  constructor(message = 'Sonos bridge is not reachable', cause) {
+    super(message);
+    this.name = 'BridgeUnreachableError';
+    this.code = 'BRIDGE_UNREACHABLE';
+    if (cause) this.cause = cause;
+  }
+}
+
+// --- Mock Data (only when VITE_SONOS_FORCE_MOCK=true) ---
 
 const mockZones = [
   {
@@ -68,13 +130,26 @@ const mockPlaylists = [
   'Sunday Morning',
 ];
 
+function baseUrlForRequest() {
+  return getEffectiveBridgeBaseUrl();
+}
+
 // --- API Functions ---
 
 async function apiFetch(path) {
   if (FORCE_MOCK) {
     throw new Error('Mock mode enabled');
   }
-  const response = await fetch(`${BASE_URL}${path}`);
+  const base = baseUrlForRequest();
+  let response;
+  try {
+    response = await fetch(`${base}${path}`);
+  } catch (err) {
+    throw new BridgeUnreachableError(
+      `Cannot reach Sonos bridge at ${base}. Install or start the bridge, or set the correct URL.`,
+      err,
+    );
+  }
   if (!response.ok) {
     throw new Error(`API error: ${response.status}`);
   }
@@ -85,7 +160,16 @@ async function apiFetchAny(path) {
   if (FORCE_MOCK) {
     throw new Error('Mock mode enabled');
   }
-  const response = await fetch(`${BASE_URL}${path}`);
+  const base = baseUrlForRequest();
+  let response;
+  try {
+    response = await fetch(`${base}${path}`);
+  } catch (err) {
+    throw new BridgeUnreachableError(
+      `Cannot reach Sonos bridge at ${base}.`,
+      err,
+    );
+  }
   if (!response.ok) {
     throw new Error(`API error: ${response.status}`);
   }
@@ -98,13 +182,17 @@ async function apiFetchAny(path) {
   }
 }
 
-// Unlike apiFetch, mutations never fall back to mock — errors are re-thrown so
-// the caller can surface them to the user.
 async function apiMutation(path) {
   if (FORCE_MOCK) {
     return { status: 'mock-ok' };
   }
-  const response = await fetch(`${BASE_URL}${path}`);
+  const base = baseUrlForRequest();
+  let response;
+  try {
+    response = await fetch(`${base}${path}`);
+  } catch (err) {
+    throw new BridgeUnreachableError(`Cannot reach Sonos bridge at ${base}.`, err);
+  }
   if (!response.ok) {
     throw new Error(`API error: ${response.status}`);
   }
@@ -115,7 +203,13 @@ async function apiMutationTextOk(path) {
   if (FORCE_MOCK) {
     return { status: 'mock-ok' };
   }
-  const response = await fetch(`${BASE_URL}${path}`, { method: 'POST' });
+  const base = baseUrlForRequest();
+  let response;
+  try {
+    response = await fetch(`${base}${path}`, { method: 'POST' });
+  } catch (err) {
+    throw new BridgeUnreachableError(`Cannot reach Sonos bridge at ${base}.`, err);
+  }
   if (!response.ok) {
     throw new Error(`API error: ${response.status}`);
   }
@@ -143,34 +237,37 @@ async function apiMutationTry(paths) {
 
 function withResolvedAlbumArt(track) {
   if (!track) return track;
+  const base = baseUrlForRequest();
   if (track.absoluteAlbumArtUri) {
     return { ...track, albumArtUri: track.absoluteAlbumArtUri };
   }
   if (track.albumArtUri && track.albumArtUri.startsWith('/')) {
-    return { ...track, albumArtUri: `${BASE_URL}${track.albumArtUri}` };
+    return { ...track, albumArtUri: `${base}${track.albumArtUri}` };
   }
   return track;
 }
 
 export async function getZones() {
-  try {
-    return await apiFetch('/zones');
-  } catch {
+  if (FORCE_MOCK) {
     return mockZones;
   }
+  return apiFetch('/zones');
 }
 
 export async function getState(room) {
-  try {
-    const state = await apiFetch(`/${encodeURIComponent(room)}/state`);
+  if (FORCE_MOCK) {
     return {
-      ...state,
-      currentTrack: withResolvedAlbumArt(state?.currentTrack),
-      nextTrack: withResolvedAlbumArt(state?.nextTrack),
+      ...mockPlayerState,
+      currentTrack: withResolvedAlbumArt(mockPlayerState.currentTrack),
+      nextTrack: withResolvedAlbumArt(mockPlayerState.nextTrack),
     };
-  } catch {
-    return { ...mockPlayerState };
   }
+  const state = await apiFetch(`/${encodeURIComponent(room)}/state`);
+  return {
+    ...state,
+    currentTrack: withResolvedAlbumArt(state?.currentTrack),
+    nextTrack: withResolvedAlbumArt(state?.nextTrack),
+  };
 }
 
 export function play(room) {
@@ -196,20 +293,20 @@ export function setVolume(room, level) {
 function resolveItemArt(item) {
   if (!item || typeof item !== 'object') return item;
   const art = item.albumArtUri || item.albumArtURI;
+  const base = baseUrlForRequest();
   if (art && typeof art === 'string' && art.startsWith('/')) {
-    return { ...item, albumArtUri: `${BASE_URL}${art}` };
+    return { ...item, albumArtUri: `${base}${art}` };
   }
   return item;
 }
 
 export async function getFavorites(room) {
-  try {
-    const data = await apiFetch(`/${encodeURIComponent(room)}/favorites`);
-    if (Array.isArray(data)) return data.map(resolveItemArt);
-    return data;
-  } catch {
+  if (FORCE_MOCK) {
     return mockFavorites;
   }
+  const data = await apiFetch(`/${encodeURIComponent(room)}/favorites`);
+  if (Array.isArray(data)) return data.map(resolveItemArt);
+  return data;
 }
 
 export function playFavorite(room, name) {
@@ -226,13 +323,12 @@ export function playFavoriteNext(room, name) {
 }
 
 export async function getPlaylists(room) {
-  try {
-    const data = await apiFetch(`/${encodeURIComponent(room)}/playlists`);
-    if (Array.isArray(data)) return data.map(resolveItemArt);
-    return data;
-  } catch {
+  if (FORCE_MOCK) {
     return mockPlaylists;
   }
+  const data = await apiFetch(`/${encodeURIComponent(room)}/playlists`);
+  if (Array.isArray(data)) return data.map(resolveItemArt);
+  return data;
 }
 
 export function playPlaylist(room, name) {
@@ -253,7 +349,6 @@ function normalizeSpotifyTrackRef(trackIdOrUri) {
   const trimmed = trackIdOrUri.trim();
   if (!trimmed) return null;
   if (trimmed.startsWith('spotify:track:')) return trimmed;
-  // Accept raw ID and convert to URI.
   return `spotify:track:${trimmed}`;
 }
 
@@ -278,7 +373,6 @@ export async function queueSpotifyTrack(room, trackIdOrUri) {
   return apiMutation(`/${roomEnc}/spotify/queue/${trackRef}`);
 }
 
-/** Play any Spotify URI now (track, album, playlist, etc.). Path must use literal colons. */
 export async function playSpotifyUriNow(room, spotifyUri) {
   const roomEnc = encodeURIComponent(room);
   if (typeof spotifyUri !== 'string' || !spotifyUri.startsWith('spotify:')) {
@@ -312,6 +406,9 @@ export function leaveRoom(room) {
 }
 
 export async function getQueue(room) {
+  if (FORCE_MOCK) {
+    return [];
+  }
   const encodedRoom = encodeURIComponent(room);
   const candidates = [
     `/${encodedRoom}/queue`,
@@ -331,9 +428,9 @@ export async function isBridgeReachable() {
   if (FORCE_MOCK) {
     return false;
   }
-
+  const base = baseUrlForRequest();
   try {
-    const response = await fetch(`${BASE_URL}/zones`);
+    const response = await fetch(`${base}/zones`);
     return response.ok;
   } catch {
     return false;

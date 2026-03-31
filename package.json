@@ -42,6 +42,16 @@
       "electron/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "scripts/install-bridge.command",
+        "to": "bridge-installer/install-bridge.command"
+      },
+      {
+        "from": "scripts/token-server.cjs",
+        "to": "bridge-installer/token-server.cjs"
+      }
+    ],
     "dmg": {
       "format": "ULFO"
     },

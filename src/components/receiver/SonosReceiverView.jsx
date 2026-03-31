@@ -11,6 +11,8 @@ import { RackSlot } from './RackSlot.jsx';
 import { useSonos } from '../../hooks/useSonos.js';
 import { useReceiverRackOrder } from '../../hooks/useReceiverRackOrder.js';
 import { RACK_ARIA_NAMES } from '../../lib/receiverRackOrder.js';
+import { BridgeSetupWizard } from '../BridgeSetupWizard.jsx';
+import { isMockModeEnabled } from '../../api/sonos.js';
 
 export function SonosReceiverView({ spotifyAuthError }) {
   const sonos = useSonos();
@@ -61,7 +63,9 @@ export function SonosReceiverView({ spotifyAuthError }) {
     const names =
       sonos.roomNames.length > 0
         ? sonos.roomNames
-        : ['Living Room', 'Kitchen', 'Office', 'Bedroom', 'Patio', 'Den', 'Dining', 'Gym'];
+        : isMockModeEnabled()
+          ? ['Living Room', 'Kitchen', 'Office', 'Bedroom', 'Patio', 'Den', 'Dining', 'Gym']
+          : [];
     names.forEach((name) => {
       if (!roomOrderRef.current.has(name)) {
         roomOrderRef.current.set(name, roomOrderRef.current.size);
@@ -269,6 +273,18 @@ export function SonosReceiverView({ spotifyAuthError }) {
         return null;
     }
   };
+
+  const showBridgeWizard = !isMockModeEnabled() && !sonos.bridgeReachable;
+
+  if (showBridgeWizard) {
+    return (
+      <BridgeSetupWizard
+        loading={sonos.loading}
+        errorMessage={sonos.error}
+        onRetry={() => sonos.refreshZones()}
+      />
+    );
+  }
 
   return (
     <main className="receiver-page">

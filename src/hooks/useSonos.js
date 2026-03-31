@@ -60,18 +60,24 @@ export function useSonos() {
     if (!silent) setLoading(true);
     try {
       const data = await api.getZones();
-      setZones(data);
+      const list = Array.isArray(data) ? data : [];
+      setZones(list);
       setBridgeReachable(true);
       setError(null);
-      if (!selectedRoomRef.current && data.length > 0) {
+      if (!selectedRoomRef.current && list.length > 0) {
         // Temporary default; auto-join logic below may override on first scan.
-        const fallback = safeLoadLastSelectedRoom() || data[0].coordinator.roomName;
+        const fallback = safeLoadLastSelectedRoom() || list[0].coordinator.roomName;
         setSelectedRoom(fallback);
       }
-      return data;
-    } catch {
+      return list;
+    } catch (err) {
+      setZones([]);
       setBridgeReachable(false);
-      setError('Failed to load zones');
+      if (err instanceof api.BridgeUnreachableError) {
+        setError(err.message);
+      } else {
+        setError(err?.message || 'Failed to load zones');
+      }
       return null;
     } finally {
       if (!silent) setLoading(false);
