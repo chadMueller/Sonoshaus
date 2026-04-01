@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, utilityProcess } = require('electron');
 
 const isDev = Boolean(process.env.ELECTRON_START_URL);
 const shouldFullscreen = String(process.env.KIOSK_FULLSCREEN || 'false').toLowerCase() === 'true';
@@ -18,11 +18,9 @@ let tokenServerProcess = null;
 function startTokenServer() {
   const serverPath = getTokenServerPath();
   if (!fs.existsSync(serverPath)) return;
-  tokenServerProcess = spawn(process.execPath, [serverPath], {
-    stdio: 'ignore',
-    env: { ...process.env, HOME: process.env.HOME || '/tmp' },
-  });
-  tokenServerProcess.on('error', () => {});
+  // Use utilityProcess.fork to run as a Node child process, NOT spawn with
+  // process.execPath (which is the Electron binary and would fork-bomb).
+  tokenServerProcess = utilityProcess.fork(serverPath);
   tokenServerProcess.on('exit', () => { tokenServerProcess = null; });
 }
 
