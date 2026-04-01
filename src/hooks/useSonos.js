@@ -173,29 +173,12 @@ export function useSonos() {
     };
   }, [refreshZones]);
 
-  // Scan coordinator activity every 30s
+  // Scan coordinator activity once on mount to auto-select a room. No polling.
   useEffect(() => {
     if (!zones || zones.length === 0) return;
-    let cancelled = false;
+    if (userSelectedRoomRef.current) return;
 
-    const run = async (allowAutoSelect) => {
-      try {
-        await scanCoordinatorActivity(zones, { allowAutoSelect });
-      } catch {
-        // ignore
-      }
-    };
-
-    run(true);
-
-    const interval = setInterval(() => {
-      if (!cancelled) run(false);
-    }, 30000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+    scanCoordinatorActivity(zones, { allowAutoSelect: true }).catch(() => {});
   }, [zones, scanCoordinatorActivity]);
 
   useEffect(() => () => {
