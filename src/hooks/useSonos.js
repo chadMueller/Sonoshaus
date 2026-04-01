@@ -234,20 +234,33 @@ export function useSonos() {
     return 0;
   }, []);
 
-  // Poll player state every 2 seconds when a room is selected
+  // Poll player state (2s) and queue (every 4th cycle = 8s) in a single interval
   useEffect(() => {
     if (!selectedRoom) return;
 
     let cancelled = false;
+    let tickCount = 0;
 
-    async function fetchState() {
+    async function poll() {
+      tickCount += 1;
+      const shouldFetchQueue = tickCount % 4 === 0 || tickCount === 1;
+
       try {
-        const data = await api.getState(selectedRoom);
+        const promises = [api.getState(selectedRoom)];
+        if (shouldFetchQueue) promises.push(api.getQueue(selectedRoom));
+
+        const results = await Promise.all(promises);
         if (cancelled) return;
+
+        const data = results[0];
         setPlayerState(data);
         setVolumeState(data.volume);
         setBridgeReachable(true);
         setError(null);
+
+        if (shouldFetchQueue) {
+          setQueue(normalizeQueue(results[1]));
+        }
       } catch (err) {
         if (!cancelled) {
           setBridgeReachable(false);
@@ -256,14 +269,14 @@ export function useSonos() {
       }
     }
 
-    fetchState();
-    const interval = setInterval(fetchState, 2000);
+    poll();
+    const interval = setInterval(poll, 2000);
 
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [selectedRoom]);
+  }, [selectedRoom, normalizeQueue]);
 
   // Fetch favorites and playlists when room changes
   useEffect(() => {
@@ -288,33 +301,6 @@ export function useSonos() {
     fetchContent();
     return () => { cancelled = true; };
   }, [selectedRoom]);
-
-  // Fetch queue when room changes and poll periodically.
-  useEffect(() => {
-    if (!selectedRoom) return;
-    let cancelled = false;
-
-    async function fetchQueue() {
-      try {
-        const queueData = await api.getQueue(selectedRoom);
-        if (!cancelled) {
-          setQueue(normalizeQueue(queueData));
-        }
-      } catch {
-        if (!cancelled) {
-          setQueue([]);
-        }
-      }
-    }
-
-    fetchQueue();
-    const interval = setInterval(fetchQueue, 8000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [selectedRoom, normalizeQueue]);
 
   const queueStartIndex = getQueueStartIndex(playerState, queue);
   const remainingQueue = Array.isArray(queue) ? queue.slice(queueStartIndex) : [];

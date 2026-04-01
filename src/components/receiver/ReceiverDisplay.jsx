@@ -129,7 +129,7 @@ export function ReceiverDisplay({
             Source: {source}
           </span>
           {isLongTitle ? (
-            <div className="track-title track-title-marquee" title={rawTitle}>
+            <div className="track-title track-title-marquee is-scrolling" title={rawTitle}>
               <div
                 className="track-title-marquee-inner"
                 aria-label={normalizedTitle}

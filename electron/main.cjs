@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 
 const isDev = Boolean(process.env.ELECTRON_START_URL);
 const shouldFullscreen = String(process.env.KIOSK_FULLSCREEN || 'false').toLowerCase() === 'true';
@@ -37,6 +37,18 @@ function createWindow() {
     win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   }
 }
+
+ipcMain.handle('sonohaus:open-external', async (_event, url) => {
+  if (typeof url !== 'string' || !url.startsWith('https://')) {
+    return { ok: false, message: 'Only HTTPS URLs are allowed' };
+  }
+  try {
+    await shell.openExternal(url);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, message: err?.message || String(err) };
+  }
+});
 
 ipcMain.handle('sonohaus:open-bridge-installer', async () => {
   if (process.platform !== 'darwin') {

@@ -801,8 +801,13 @@
   display: inline-flex;
   align-items: center;
   width: max-content;
-  will-change: transform;
   animation: trackTitleMarquee var(--marquee-duration, 16000ms) linear infinite;
+  animation-play-state: paused;
+}
+
+.track-title-marquee.is-scrolling .track-title-marquee-inner {
+  animation-play-state: running;
+  will-change: transform;
 }
 
 .track-title-marquee-text {
@@ -1928,8 +1933,13 @@
   display: inline-flex;
   align-items: center;
   width: max-content;
-  will-change: transform;
   animation: queueTickerMarquee var(--marquee-duration, 18000ms) linear infinite;
+  animation-play-state: paused;
+}
+
+.queue-ticker.is-scrolling .queue-ticker-inner {
+  animation-play-state: running;
+  will-change: transform;
 }
 
 .queue-ticker-text {

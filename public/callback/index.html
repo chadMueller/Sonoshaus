@@ -4,10 +4,20 @@
 <body>
 <script>
 // Spotify redirects here with ?code=...&state=...
-// We redirect to localhost so the local app picks it up.
+// We redirect to the local app so it can exchange the code for tokens.
+// If the state starts with "dmg_" it came from the Electron app and should
+// go to the token-sync server which handles the exchange on its behalf.
 var params = window.location.search;
+var sp = new URLSearchParams(window.location.search);
+var state = sp.get('state') || '';
 if (params) {
-  window.location.replace('http://localhost:3000/' + params);
+  if (state.startsWith('dmg_')) {
+    // Strip the dmg_ prefix before forwarding so the state matches
+    sp.set('state', state.slice(4));
+    window.location.replace('http://localhost:38901/callback?' + sp.toString());
+  } else {
+    window.location.replace('http://localhost:3000/' + params);
+  }
 } else {
   document.body.textContent = 'Missing callback parameters.';
 }

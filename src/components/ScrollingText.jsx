@@ -4,7 +4,6 @@ export function ScrollingText({ text = '', theme, width }) {
   const containerRef = useRef(null);
   const textRef = useRef(null);
   const [shouldScroll, setShouldScroll] = useState(false);
-  const [offset, setOffset] = useState(0);
   const [containerWidth, setContainerWidth] = useState(width || 260);
   const animRef = useRef(null);
 
@@ -31,7 +30,7 @@ export function ScrollingText({ text = '', theme, width }) {
     if (!textRef.current) return;
     const textWidth = textRef.current.scrollWidth;
     setShouldScroll(textWidth > containerWidth);
-    setOffset(0);
+    if (textRef.current) textRef.current.style.transform = 'none';
   }, [text, containerWidth]);
 
   useEffect(() => {
@@ -51,7 +50,9 @@ export function ScrollingText({ text = '', theme, width }) {
           pos = -containerWidth;
         }
       }
-      setOffset(-pos);
+      if (textRef.current) {
+        textRef.current.style.transform = `translateX(${-pos}px)`;
+      }
       animRef.current = requestAnimationFrame(animate);
     }
 
@@ -85,7 +86,7 @@ export function ScrollingText({ text = '', theme, width }) {
           position: 'absolute',
           top: 0,
           left: 0,
-          transform: shouldScroll ? `translateX(${offset}px)` : 'none',
+          transform: 'none',
         }}
       >
         {displayText}

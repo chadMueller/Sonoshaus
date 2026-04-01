@@ -109,6 +109,19 @@ export function isSpotifyAuthed() {
   return !!getStoredTokens();
 }
 
+async function pollForSharedTokens(timeoutMs = 120000, intervalMs = 2000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const loaded = await loadSharedTokens();
+    if (loaded) {
+      window.dispatchEvent(new Event(SPOTIFY_AUTH_SUCCESS_EVENT));
+      return;
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error('Spotify login timed out. Complete the login in your browser and try again.');
+}
+
 export async function startSpotifyLogin({ scopes = ['user-library-read'] } = {}) {
   const { clientId, redirectUri } = getSpotifyConfig();
   if (!clientId) throw new Error('Missing VITE_SPOTIFY_CLIENT_ID');
@@ -136,10 +149,44 @@ export async function startSpotifyLogin({ scopes = ['user-library-read'] } = {})
 
   const authUrl = `${AUTH_URL}?${params.toString()}`;
 
-  if (window.location.protocol === 'file:') {
-    throw new Error(
-      'Connect Spotify from the web UI at http://localhost:3003 first. The DMG will pick up the connection automatically.'
-    );
+  if (window.location.protocol === 'file:' || window.sonohaus?.isElectron) {
+    if (!window.sonohaus?.openExternal) {
+      throw new Error('Electron bridge not available. Restart the app and try again.');
+    }
+    // Use the Vercel callback page as the redirect URI (Spotify requires HTTPS).
+    // The Vercel page detects the "dmg_" state prefix and redirects to the local
+    // token-sync server which handles the code exchange.
+    const vercelRedirect = String(import.meta.env.VITE_SPOTIFY_REDIRECT_URI || '').trim();
+    if (!vercelRedirect) {
+      throw new Error('Missing VITE_SPOTIFY_REDIRECT_URI.');
+    }
+
+    // Send the PKCE verifier to the token server so it can exchange the code.
+    // redirect_uri must match what was sent to Spotify (the Vercel URL).
+    await fetch(`${TOKEN_SYNC_URL.replace('/tokens', '')}/auth/prepare`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        verifier,
+        clientId,
+        redirectUri: vercelRedirect,
+      }),
+    });
+
+    const browserParams = new URLSearchParams({
+      client_id: clientId,
+      response_type: 'code',
+      redirect_uri: vercelRedirect,
+      code_challenge_method: 'S256',
+      code_challenge: challenge,
+      state: `dmg_${state}`,
+      scope: scopes.join(' '),
+    });
+    const browserAuthUrl = `${AUTH_URL}?${browserParams.toString()}`;
+    await window.sonohaus.openExternal(browserAuthUrl);
+    // Poll the token-sync server until tokens arrive
+    await pollForSharedTokens();
+    return;
   }
   window.location.assign(authUrl);
 }

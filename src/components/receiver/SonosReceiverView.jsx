@@ -24,7 +24,9 @@ export function SonosReceiverView({ spotifyAuthError }) {
   const roomOrderRef = useRef(new Map());
   const [pendingRooms, setPendingRooms] = useState({});
 
+  const hasPendingRooms = Object.keys(pendingRooms).length > 0;
   useEffect(() => {
+    if (!hasPendingRooms) return;
     const id = setInterval(() => {
       const now = Date.now();
       setPendingRooms((prev) => {
@@ -41,7 +43,7 @@ export function SonosReceiverView({ spotifyAuthError }) {
       });
     }, 500);
     return () => clearInterval(id);
-  }, []);
+  }, [hasPendingRooms]);
 
   useEffect(() => {
     setPendingRooms((prev) => {
