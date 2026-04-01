@@ -2025,6 +2025,15 @@
   background: rgba(229, 141, 61, 0.08);
 }
 
+.stack-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.stack-item:disabled:hover {
+  background: transparent;
+}
+
 .stack-item-text {
   min-width: 0;
 }

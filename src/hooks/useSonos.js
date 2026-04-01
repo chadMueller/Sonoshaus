@@ -372,6 +372,21 @@ export function useSonos() {
     }
   }, [selectedRoom, refreshQueue]);
 
+  const skipToQueueIndex = useCallback(
+    async (zeroBasedIndex) => {
+      if (!selectedRoom) return;
+      try {
+        await api.seekToQueueIndex(selectedRoom, zeroBasedIndex);
+        refreshQueue();
+        const state = await api.getState(selectedRoom);
+        if (state) setPlayerState(state);
+      } catch {
+        setError('Could not skip to that track');
+      }
+    },
+    [selectedRoom, refreshQueue],
+  );
+
   const setVolume = useCallback(async (level) => {
     if (!selectedRoom) return;
     const clamped = Math.max(0, Math.min(100, Math.round(level)));
@@ -583,6 +598,7 @@ export function useSonos() {
     pause,
     next,
     prev,
+    skipToQueueIndex,
     toggleShuffle,
     toggleRepeat,
     refreshZones,

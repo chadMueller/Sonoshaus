@@ -309,6 +309,24 @@ export function previous(room) {
   return apiMutation(`/${encodeURIComponent(room)}/previous`);
 }
 
+/**
+ * Jump playback to a track in the coordinator queue (node-sonos-http-api: trackseek).
+ * @param {string} room
+ * @param {number} zeroBasedIndex — index in the full queue array (0 = first track)
+ */
+export function seekToQueueIndex(room, zeroBasedIndex) {
+  const i = Math.floor(Number(zeroBasedIndex));
+  if (!Number.isFinite(i) || i < 0) {
+    throw new Error('Invalid queue index');
+  }
+  const oneBased = i + 1;
+  const roomEnc = encodeURIComponent(room);
+  return apiMutationTry([
+    `/${roomEnc}/trackseek/${oneBased}`,
+    `/${roomEnc}/trackseek/${i}`,
+  ]);
+}
+
 export function setVolume(room, level) {
   const roomEnc = encodeURIComponent(room);
   const path = `/${roomEnc}/volume/${level}`;

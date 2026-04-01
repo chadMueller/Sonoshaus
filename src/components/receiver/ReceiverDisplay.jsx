@@ -40,6 +40,7 @@ export const ReceiverDisplay = React.memo(function ReceiverDisplay({
   queueStartIndex = 0,
   queueLoading,
   shuffleOn,
+  onSeekToQueueIndex,
 }) {
   const [showQueue, setShowQueue] = useState(false);
   const rawTitle = currentTrack?.title || (loading ? 'Loading Track...' : 'No Track Selected');
@@ -96,9 +97,9 @@ export const ReceiverDisplay = React.memo(function ReceiverDisplay({
           className={`receiver-queue-toggle ${showQueue ? 'active' : ''}`}
           onClick={() => setShowQueue((v) => !v)}
           aria-pressed={showQueue}
-          aria-label={showQueue ? 'Show now playing' : 'Show queue'}
+          aria-label={showQueue ? 'Show now playing console' : 'Show queue'}
         >
-          Queue
+          {showQueue ? 'Console' : 'Queue'}
         </button>
       </div>
 
@@ -108,6 +109,8 @@ export const ReceiverDisplay = React.memo(function ReceiverDisplay({
             queue={queue}
             queueStartIndex={queueStartIndex}
             loading={queueLoading ?? loading}
+            selectedRoom={selectedRoom}
+            onSeekToQueueIndex={onSeekToQueueIndex}
           />
         </div>
       ) : (

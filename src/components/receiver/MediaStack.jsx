@@ -23,6 +23,8 @@ export function MediaStack({
   queue,
   queueStartIndex = 0,
   loading,
+  selectedRoom,
+  onSeekToQueueIndex,
 }) {
   const activeTab = 'queue';
 
@@ -40,6 +42,8 @@ export function MediaStack({
         return queueItems;
     }
   }, [activeTab, queueItems]);
+
+  const seekEnabled = typeof onSeekToQueueIndex === 'function' && !!selectedRoom;
 
   return (
     <section className="stack-module stack-module--queue" aria-label="Queue">
@@ -61,14 +65,26 @@ export function MediaStack({
                 ) : (
                   activeItems.map((item, index) => (
                     <button
-                      key={`${activeTab}-${item.title}`}
+                      key={`${activeTab}-${index}-${item.title}`}
                       type="button"
                       className="stack-item"
                       title={item.subtitle ? `${item.subtitle} — ${item.title}` : item.title}
+                      disabled={!seekEnabled}
+                      aria-label={
+                        seekEnabled
+                          ? `Skip to ${item.title}${item.subtitle ? ` by ${item.subtitle}` : ''}`
+                          : undefined
+                      }
+                      onClick={() => {
+                        if (!seekEnabled) return;
+                        onSeekToQueueIndex(index);
+                      }}
                     >
                       <div className="stack-item-text">
                         <div className="stack-item-title stack-item-title--single">
-                          {index === 0 ? <span className="stack-item-now">Now</span> : null}
+                          {index === queueStartIndex ? (
+                            <span className="stack-item-now">Now</span>
+                          ) : null}
                           {item.subtitle ? (
                             <>
                               <span className="stack-item-artist">{item.subtitle}</span>

@@ -165,6 +165,7 @@ export function SonosReceiverView({ spotifyAuthError }) {
                   queueStartIndex={sonos.queueStartIndex}
                   queueLoading={sonos.loading}
                   shuffleOn={shuffleOn}
+                  onSeekToQueueIndex={sonos.skipToQueueIndex}
                 />
               </section>
 
@@ -264,6 +265,8 @@ export function SonosReceiverView({ spotifyAuthError }) {
             queue={sonos.queue}
             queueStartIndex={sonos.queueStartIndex}
             loading={sonos.loading}
+            selectedRoom={sonos.selectedRoom}
+            onSeekToQueueIndex={sonos.skipToQueueIndex}
           />
         );
       default:
