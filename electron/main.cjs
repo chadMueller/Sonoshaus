@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
-const { app, BrowserWindow, ipcMain, shell, utilityProcess } = require('electron');
+const { spawn, fork } = require('node:child_process');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 
 const isDev = Boolean(process.env.ELECTRON_START_URL);
 const shouldFullscreen = String(process.env.KIOSK_FULLSCREEN || 'false').toLowerCase() === 'true';
@@ -18,9 +18,24 @@ let tokenServerProcess = null;
 function startTokenServer() {
   const serverPath = getTokenServerPath();
   if (!fs.existsSync(serverPath)) return;
-  // Use utilityProcess.fork to run as a Node child process, NOT spawn with
-  // process.execPath (which is the Electron binary and would fork-bomb).
-  tokenServerProcess = utilityProcess.fork(serverPath);
+  // Use child_process.fork with the system Node, NOT process.execPath
+  // (which is the Electron binary and would fork-bomb).
+  // Find system node first, fall back to bundled node if available.
+  const nodePaths = ['/usr/local/bin/node', '/opt/homebrew/bin/node'];
+  let nodeBin = null;
+  for (const p of nodePaths) {
+    if (fs.existsSync(p)) { nodeBin = p; break; }
+  }
+  if (!nodeBin) {
+    // No system Node found - skip token server. Spotify auth via DMG
+    // won't work but the app will still function for Sonos control.
+    return;
+  }
+  tokenServerProcess = spawn(nodeBin, [serverPath], {
+    stdio: 'ignore',
+    detached: false,
+  });
+  tokenServerProcess.on('error', () => { tokenServerProcess = null; });
   tokenServerProcess.on('exit', () => { tokenServerProcess = null; });
 }
 
