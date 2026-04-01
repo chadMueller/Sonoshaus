@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   startSpotifyLogin,
   clearStoredTokens,
@@ -42,7 +42,7 @@ function alphaBucket(name) {
   return '#';
 }
 
-export function SpotifyAlbumRack({
+export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
   selectedRoom,
   spotifyAuthError,
   onLibraryChange,
@@ -67,6 +67,7 @@ export function SpotifyAlbumRack({
   const [enqueueState, setEnqueueState] = useState(null);
   const enqueueAbortRef = useRef({ aborted: false });
   const fetchInFlightRef = useRef(false);
+  const [rackWindow, setRackWindow] = useState({ start: 0, end: 30 });
   const rackScrollRef = useRef(null);
   const rackSentinelRef = useRef(null);
   const carouselScrollRef = useRef(null);
@@ -246,12 +247,15 @@ export function SpotifyAlbumRack({
     return () => window.removeEventListener(SPOTIFY_AUTH_SUCCESS_EVENT, handler);
   }, [fetchNextPage]);
 
+  const fetchNextPageRef = useRef(fetchNextPage);
+  fetchNextPageRef.current = fetchNextPage;
+
   const tryFetchMore = useCallback(() => {
     if (!hasMoreRef.current || loadingMoreRef.current || fetchInFlightRef.current) {
       return;
     }
-    fetchNextPage({ reset: false });
-  }, [fetchNextPage]);
+    fetchNextPageRef.current({ reset: false });
+  }, []);
 
   const loadAllRef = useRef(false);
 
@@ -340,6 +344,32 @@ export function SpotifyAlbumRack({
     return () => clearTimeout(t);
   }, [alphaSeek, contentMode, sortMode, firstAlbumIdByLetter, scrollToLetter, tryFetchMore, albums.length]);
 
+  // Virtualization: track scroll position to render only visible album tiles
+  const TILE_WIDTH = 212; // 200px tile + 12px gap
+  const BUFFER = 10; // extra tiles outside viewport
+  useEffect(() => {
+    const el = rackScrollRef.current;
+    if (!el) return;
+    let ticking = false;
+    const update = () => {
+      const scrollLeft = el.scrollLeft;
+      const containerWidth = el.clientWidth;
+      const start = Math.max(0, Math.floor(scrollLeft / TILE_WIDTH) - BUFFER);
+      const end = Math.ceil((scrollLeft + containerWidth) / TILE_WIDTH) + BUFFER;
+      setRackWindow({ start, end });
+      ticking = false;
+    };
+    const onScroll = () => {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(update);
+      }
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    update();
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [viewMode, contentMode, sortMode]);
+
   useEffect(() => {
     if (contentMode !== 'albums') return;
     if (viewMode !== 'rack') return;
@@ -355,7 +385,7 @@ export function SpotifyAlbumRack({
     );
     obs.observe(target);
     return () => obs.disconnect();
-  }, [viewMode, tryFetchMore, albums.length, hasMore]);
+  }, [viewMode, tryFetchMore, hasMore]);
 
   useEffect(() => {
     if (contentMode !== 'albums') return;
@@ -372,7 +402,7 @@ export function SpotifyAlbumRack({
     );
     obs.observe(target);
     return () => obs.disconnect();
-  }, [viewMode, tryFetchMore, albums.length, hasMore]);
+  }, [viewMode, tryFetchMore, hasMore]);
 
   // When user starts searching, load all remaining albums so search covers the full library
   useEffect(() => {
@@ -764,7 +794,19 @@ export function SpotifyAlbumRack({
                 </div>
               ) : (
                 <div className="cd-scroll" ref={rackScrollRef} key={`scroll-${contentMode}-${viewMode}-${sortMode}`}>
-                  {(contentMode === 'albums' ? sortedAlbums : filtered).map((album) => renderAlbumTile(album, 'rack'))}
+                  {(() => {
+                    const items = contentMode === 'albums' ? sortedAlbums : filtered;
+                    const totalItems = items.length;
+                    const start = Math.min(rackWindow.start, totalItems);
+                    const end = Math.min(rackWindow.end, totalItems);
+                    return (
+                      <>
+                        {start > 0 && <div style={{ flex: '0 0 auto', width: start * TILE_WIDTH }} />}
+                        {items.slice(start, end).map((album) => renderAlbumTile(album, 'rack'))}
+                        {end < totalItems && <div style={{ flex: '0 0 auto', width: (totalItems - end) * TILE_WIDTH }} />}
+                      </>
+                    );
+                  })()}
                   {contentMode === 'albums' && hasMore ? (
                     <div ref={rackSentinelRef} className="cd-rack-sentinel" aria-hidden />
                   ) : null}
@@ -781,4 +823,4 @@ export function SpotifyAlbumRack({
       </div>
     </section>
   );
-}
+});

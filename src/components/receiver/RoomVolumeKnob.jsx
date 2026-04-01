@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 const MIN_ANGLE = -130;
 const MAX_ANGLE = 130;
@@ -14,7 +14,7 @@ function snapToNotch(value) {
   return clamp(Math.round(value / STEP) * STEP, 0, 100);
 }
 
-export function RoomVolumeKnob({ value = 0, label, onChange }) {
+export const RoomVolumeKnob = React.memo(function RoomVolumeKnob({ value = 0, label, onChange }) {
   const dragRef = useRef({ startY: 0, startValue: 0 });
   const [dragging, setDragging] = useState(false);
   const clampedValue = clamp(Math.round(value), 0, 100);
@@ -109,4 +109,4 @@ export function RoomVolumeKnob({ value = 0, label, onChange }) {
       </span>
     </button>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MediaStack } from './MediaStack.jsx';
 
 const FALLBACK_ART =
@@ -30,7 +30,7 @@ function truncateText(value, maxChars) {
   return `${normalized.slice(0, Math.max(0, maxChars - 1))}…`;
 }
 
-export function ReceiverDisplay({
+export const ReceiverDisplay = React.memo(function ReceiverDisplay({
   loading,
   error,
   currentTrack,
@@ -184,4 +184,4 @@ export function ReceiverDisplay({
       )}
     </div>
   );
-}
+});

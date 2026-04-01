@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 const MIN_ANGLE = -140;
 const MAX_ANGLE = 140;
@@ -9,7 +9,7 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-export function VolumeKnob({ value = 50, onChange }) {
+export const VolumeKnob = React.memo(function VolumeKnob({ value = 50, onChange }) {
   const knobRef = useRef(null);
   const dragRef = useRef({ startY: 0, startValue: 50 });
   const [angle, setAngle] = useState(START_ANGLE);
@@ -90,4 +90,4 @@ export function VolumeKnob({ value = 50, onChange }) {
       </span>
     </div>
   );
-}
+});

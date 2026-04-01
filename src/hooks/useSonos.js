@@ -415,7 +415,6 @@ export function useSonos() {
       roomVolumeLastSentRef.current[roomName] = clamped;
       try {
         await api.setVolume(roomName, clamped);
-        await refreshZones({ silent: true });
         if (selectedRoomRef.current === roomName) {
           setVolumeState(clamped);
         }
@@ -423,7 +422,7 @@ export function useSonos() {
         setError(`Failed to set volume for ${roomName}`);
       }
     }, 220);
-  }, [refreshZones]);
+  }, []);
 
   const toggleShuffle = useCallback(async () => {
     if (!selectedRoom) return;

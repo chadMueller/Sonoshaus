@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { usePresets } from '../../hooks/usePresets.js';
 import { PRESET_COUNT } from '../../lib/presets.js';
 
@@ -25,7 +25,7 @@ function truncateLabel(value, max) {
 
 const LONG_PRESS_MS = 600;
 
-export function PresetsRack({
+export const PresetsRack = React.memo(function PresetsRack({
   selectedRoom,
   roomNames = [],
   favorites = [],
@@ -316,4 +316,4 @@ export function PresetsRack({
       </div>
     </section>
   );
-}
+});
