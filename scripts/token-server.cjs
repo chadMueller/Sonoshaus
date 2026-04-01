@@ -20,6 +20,17 @@ const PENDING_AUTH_FILE = path.join(
 // Ensure directory exists
 fs.mkdirSync(path.dirname(TOKEN_FILE), { recursive: true });
 
+function requestPathname(req) {
+  try {
+    const u = new URL(req.url, 'http://127.0.0.1');
+    let p = u.pathname || '/';
+    if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
+    return p;
+  } catch {
+    return '/';
+  }
+}
+
 function readTokens() {
   try { return fs.readFileSync(TOKEN_FILE, 'utf8'); } catch { return '{}'; }
 }
@@ -67,19 +78,26 @@ function spotifyTokenExchange(params) {
 }
 
 const server = http.createServer(async (req, res) => {
+  const pathname = requestPathname(req);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
-  if (req.url === '/tokens' && req.method === 'GET') {
+  if (pathname === '/health' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, authPrepare: true, version: 2 }));
+    return;
+  }
+
+  if (pathname === '/tokens' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(readTokens());
     return;
   }
 
-  if (req.url === '/tokens' && req.method === 'POST') {
+  if (pathname === '/tokens' && req.method === 'POST') {
     let body = '';
     req.on('data', (chunk) => { body += chunk; });
     req.on('end', () => {
@@ -91,7 +109,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Store PKCE verifier + client config before opening browser auth
-  if (req.url === '/auth/prepare' && req.method === 'POST') {
+  if (pathname === '/auth/prepare' && req.method === 'POST') {
     let body = '';
     req.on('data', (chunk) => { body += chunk; });
     req.on('end', () => {
@@ -109,7 +127,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // OAuth callback - Spotify redirects here after user authorizes
-  if (req.url?.startsWith('/callback') && req.method === 'GET') {
+  if (pathname === '/callback' && req.method === 'GET') {
     const url = new URL(req.url, `http://localhost:${PORT}`);
     const code = url.searchParams.get('code');
     const error = url.searchParams.get('error');
@@ -165,7 +183,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.url === '/ping') {
+  if (pathname === '/ping') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end('{"ok":true}');
     return;

@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const { startSpotifyTokenServer } = require('./spotify-token-server.cjs');
 
 const isDev = Boolean(process.env.ELECTRON_START_URL);
@@ -89,7 +89,16 @@ ipcMain.handle('sonohaus:open-bridge-installer', async () => {
 });
 
 app.whenReady().then(async () => {
-  await startSpotifyTokenServer();
+  const tokenServer = await startSpotifyTokenServer();
+  if (tokenServer?.reason === 'legacy-port-blocked') {
+    dialog.showMessageBoxSync({
+      type: 'warning',
+      title: 'Spotify helper',
+      message: 'An older Sonohaus service is using port 38901.',
+      detail:
+        'Re-run the bridge installer from Sonohaus (or run install-bridge.command from the app bundle). Alternatively unload the legacy job: launchctl bootout gui/$UID ~/Library/LaunchAgents/com.sonohaus.token-server.plist — then restart Sonohaus.',
+    });
+  }
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

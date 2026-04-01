@@ -7,7 +7,7 @@ const STORAGE_KEY = 'sonohaus.spotify.tokens.v1';
 const VERIFIER_KEY = 'sonohaus.spotify.pkce.verifier.v1';
 const STATE_KEY = 'sonohaus.spotify.pkce.state.v1';
 
-const TOKEN_SYNC_URL = 'http://localhost:38901/tokens';
+const TOKEN_SYNC_URL = 'http://127.0.0.1:38901/tokens';
 const TOKEN_SYNC_BASE = 'http://127.0.0.1:38901';
 
 /** Spotify redirect for DMG — must match exactly in the Spotify Developer Dashboard (add once per app). */
@@ -187,9 +187,13 @@ export async function startSpotifyLogin({ scopes = ['user-library-read'] } = {})
       }),
     });
     if (!prepareRes.ok) {
-      const detail = await prepareRes.text().catch(() => '');
+      const detail = (await prepareRes.text().catch(() => '')).trim();
+      const legacyHint =
+        prepareRes.status === 404
+          ? ' This usually means an older Sonohaus token service is still running on port 38901 (it does not support Connect). Re-run the bridge installer from Sonohaus, or run: launchctl bootout gui/$UID ~/Library/LaunchAgents/com.sonohaus.token-server.plist — then restart Sonohaus.'
+          : '';
       throw new Error(
-        `Could not reach the Spotify helper on port 38901 (${prepareRes.status}). Quit other apps using that port or restart Sonohaus. ${detail}`,
+        `Could not reach the Spotify helper on port 38901 (${prepareRes.status}). Quit other apps using that port or restart Sonohaus.${detail ? ` ${detail}` : ''}${legacyHint}`,
       );
     }
 

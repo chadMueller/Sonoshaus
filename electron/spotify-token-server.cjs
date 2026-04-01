@@ -23,6 +23,18 @@ const PENDING_AUTH_FILE = path.join(
 
 fs.mkdirSync(path.dirname(TOKEN_FILE), { recursive: true });
 
+/** Normalize path for routing (handles query strings and trailing slashes). */
+function requestPathname(req) {
+  try {
+    const u = new URL(req.url, 'http://127.0.0.1');
+    let p = u.pathname || '/';
+    if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
+    return p;
+  } catch {
+    return '/';
+  }
+}
+
 function readTokens() {
   try {
     return fs.readFileSync(TOKEN_FILE, 'utf8');
@@ -86,6 +98,41 @@ function spotifyTokenExchange(params) {
 }
 
 /**
+ * True if POST /auth/prepare exists (not a legacy token server).
+ * Sends invalid JSON so the handler returns 400 without writing pending auth.
+ */
+function probeAuthPrepareRouteExists() {
+  return new Promise((resolve) => {
+    const req = http.request(
+      {
+        hostname: '127.0.0.1',
+        port: PORT,
+        path: '/auth/prepare',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': 1,
+        },
+        timeout: 2000,
+      },
+      (res) => {
+        res.resume();
+        res.on('end', () => {
+          resolve(res.statusCode !== 404);
+        });
+      },
+    );
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
+    req.write('x');
+    req.end();
+  });
+}
+
+/**
  * @returns {Promise<{ ok: boolean, started?: boolean, reason?: string }>}
  */
 function startSpotifyTokenServer() {
@@ -98,6 +145,7 @@ function startSpotifyTokenServer() {
     };
 
     const server = http.createServer(async (req, res) => {
+      const pathname = requestPathname(req);
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -108,13 +156,19 @@ function startSpotifyTokenServer() {
         return;
       }
 
-      if (req.url === '/tokens' && req.method === 'GET') {
+      if (pathname === '/health' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, authPrepare: true, version: 2 }));
+        return;
+      }
+
+      if (pathname === '/tokens' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(readTokens());
         return;
       }
 
-      if (req.url === '/tokens' && req.method === 'POST') {
+      if (pathname === '/tokens' && req.method === 'POST') {
         let body = '';
         req.on('data', (chunk) => {
           body += chunk;
@@ -127,7 +181,7 @@ function startSpotifyTokenServer() {
         return;
       }
 
-      if (req.url === '/auth/prepare' && req.method === 'POST') {
+      if (pathname === '/auth/prepare' && req.method === 'POST') {
         let body = '';
         req.on('data', (chunk) => {
           body += chunk;
@@ -146,7 +200,7 @@ function startSpotifyTokenServer() {
         return;
       }
 
-      if (req.url?.startsWith('/callback') && req.method === 'GET') {
+      if (pathname === '/callback' && req.method === 'GET') {
         const url = new URL(req.url, `http://localhost:${PORT}`);
         const code = url.searchParams.get('code');
         const error = url.searchParams.get('error');
@@ -210,7 +264,7 @@ function startSpotifyTokenServer() {
         return;
       }
 
-      if (req.url === '/ping') {
+      if (pathname === '/ping') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end('{"ok":true}');
         return;
@@ -220,10 +274,18 @@ function startSpotifyTokenServer() {
       res.end('Not found');
     });
 
-    server.on('error', (err) => {
+    server.on('error', async (err) => {
       if (err.code === 'EADDRINUSE') {
-        console.log('[spotify-token-server] port 38901 in use (bridge or other instance) — OK');
-        finish({ ok: true, started: false, reason: 'already-running' });
+        const supports = await probeAuthPrepareRouteExists();
+        if (supports) {
+          console.log('[spotify-token-server] port 38901 in use — token helper already running (OK)');
+          finish({ ok: true, started: false, reason: 'already-running' });
+          return;
+        }
+        console.error(
+          '[spotify-token-server] Port 38901 is in use by a legacy helper without Spotify Connect support. Unload the old token server: launchctl bootout gui/$UID ~/Library/LaunchAgents/com.sonohaus.token-server.plist (or re-run the Sonohaus bridge installer), then restart Sonohaus.',
+        );
+        finish({ ok: true, started: false, reason: 'legacy-port-blocked' });
       } else {
         console.error('[spotify-token-server]', err);
         finish({ ok: false, started: false, reason: err.message });
