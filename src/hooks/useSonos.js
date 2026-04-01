@@ -158,16 +158,14 @@ export function useSonos() {
     [getCoordinatorRooms, roomLastActiveAt],
   );
 
-  // Fetch zones on mount
+  // Fetch zones every 30s
   useEffect(() => {
     let cancelled = false;
     refreshZones();
 
     const interval = setInterval(() => {
-      if (!cancelled) {
-        refreshZones({ silent: true });
-      }
-    }, 10000);
+      if (!cancelled) refreshZones({ silent: true });
+    }, 30000);
 
     return () => {
       cancelled = true;
@@ -175,7 +173,7 @@ export function useSonos() {
     };
   }, [refreshZones]);
 
-  // Auto-join the most recently active coordinator (best-effort).
+  // Scan coordinator activity every 30s
   useEffect(() => {
     if (!zones || zones.length === 0) return;
     let cancelled = false;
@@ -188,12 +186,11 @@ export function useSonos() {
       }
     };
 
-    // First run should be allowed to auto-select.
     run(true);
 
     const interval = setInterval(() => {
       if (!cancelled) run(false);
-    }, 15000);
+    }, 30000);
 
     return () => {
       cancelled = true;
@@ -234,49 +231,83 @@ export function useSonos() {
     return 0;
   }, []);
 
-  // Poll player state (2s) and queue (every 4th cycle = 8s) in a single interval
+  // Refresh queue on demand (called after user actions + track changes)
+  const refreshQueue = useCallback(async () => {
+    if (!selectedRoomRef.current) return;
+    try {
+      const queueData = await api.getQueue(selectedRoomRef.current);
+      setQueue(normalizeQueue(queueData));
+    } catch {
+      setQueue([]);
+    }
+  }, [normalizeQueue]);
+
+  // Poll player state every 10s. Fetch queue only on track change.
+  const lastTrackRef = useRef(null);
   useEffect(() => {
     if (!selectedRoom) return;
 
     let cancelled = false;
-    let tickCount = 0;
+    let timerId = null;
+    lastTrackRef.current = null;
 
     async function poll() {
-      tickCount += 1;
-      const shouldFetchQueue = tickCount % 4 === 0 || tickCount === 1;
-
       try {
-        const promises = [api.getState(selectedRoom)];
-        if (shouldFetchQueue) promises.push(api.getQueue(selectedRoom));
-
-        const results = await Promise.all(promises);
+        const data = await api.getState(selectedRoom);
         if (cancelled) return;
 
-        const data = results[0];
+        const currentTrack = data.currentTrack?.uri || data.currentTrack?.title || null;
+        const trackChanged = lastTrackRef.current !== null && currentTrack !== lastTrackRef.current;
+        lastTrackRef.current = currentTrack;
+
         setPlayerState(data);
         setVolumeState(data.volume);
         setBridgeReachable(true);
         setError(null);
 
-        if (shouldFetchQueue) {
-          setQueue(normalizeQueue(results[1]));
-        }
+        if (trackChanged) refreshQueue();
       } catch (err) {
         if (!cancelled) {
           setBridgeReachable(false);
           setError('Failed to fetch player state');
         }
       }
+
+      if (!cancelled) {
+        timerId = setTimeout(poll, 10000);
+      }
     }
 
-    poll();
-    const interval = setInterval(poll, 2000);
+    // Initial fetch: state + queue together
+    (async () => {
+      try {
+        const [data, queueData] = await Promise.all([
+          api.getState(selectedRoom),
+          api.getQueue(selectedRoom),
+        ]);
+        if (cancelled) return;
+        lastTrackRef.current = data.currentTrack?.uri || data.currentTrack?.title || null;
+        setPlayerState(data);
+        setVolumeState(data.volume);
+        setBridgeReachable(true);
+        setError(null);
+        setQueue(normalizeQueue(queueData));
+      } catch (err) {
+        if (!cancelled) {
+          setBridgeReachable(false);
+          setError('Failed to fetch player state');
+        }
+      }
+      if (!cancelled) {
+        timerId = setTimeout(poll, 10000);
+      }
+    })();
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      if (timerId) clearTimeout(timerId);
     };
-  }, [selectedRoom, normalizeQueue]);
+  }, [selectedRoom, normalizeQueue, refreshQueue]);
 
   // Fetch favorites and playlists when room changes
   useEffect(() => {
@@ -336,19 +367,21 @@ export function useSonos() {
     if (!selectedRoom) return;
     try {
       await api.next(selectedRoom);
+      refreshQueue();
     } catch {
       setError('Skip command failed');
     }
-  }, [selectedRoom]);
+  }, [selectedRoom, refreshQueue]);
 
   const prev = useCallback(async () => {
     if (!selectedRoom) return;
     try {
       await api.previous(selectedRoom);
+      refreshQueue();
     } catch {
       setError('Skip command failed');
     }
-  }, [selectedRoom]);
+  }, [selectedRoom, refreshQueue]);
 
   const setVolume = useCallback(async (level) => {
     if (!selectedRoom) return;
@@ -435,45 +468,49 @@ export function useSonos() {
     if (!selectedRoom) return;
     try {
       await api.playFavorite(selectedRoom, name);
+      refreshQueue();
     } catch {
       setError('Failed to play favorite');
     }
-  }, [selectedRoom]);
+  }, [selectedRoom, refreshQueue]);
 
   const playPlaylist = useCallback(async (name) => {
     if (!selectedRoom) return;
     try {
       await api.playPlaylist(selectedRoom, name);
+      refreshQueue();
     } catch {
       setError('Failed to play playlist');
     }
-  }, [selectedRoom]);
+  }, [selectedRoom, refreshQueue]);
 
   const playFavoriteNext = useCallback(async (name) => {
     if (!selectedRoom) return false;
     try {
       await api.playFavoriteNext(selectedRoom, name);
       setPlayNextSupported(true);
+      refreshQueue();
       return true;
     } catch {
       setPlayNextSupported(false);
       setError('Play-next not supported by current Sonos bridge endpoint');
       return false;
     }
-  }, [selectedRoom]);
+  }, [selectedRoom, refreshQueue]);
 
   const playPlaylistNext = useCallback(async (name) => {
     if (!selectedRoom) return false;
     try {
       await api.playPlaylistNext(selectedRoom, name);
       setPlayNextSupported(true);
+      refreshQueue();
       return true;
     } catch {
       setPlayNextSupported(false);
       setError('Play-next not supported by current Sonos bridge endpoint');
       return false;
     }
-  }, [selectedRoom]);
+  }, [selectedRoom, refreshQueue]);
 
   const currentZone = selectedRoom ? findZoneForRoom(selectedRoom) : null;
   const currentGroupRooms = currentZone
