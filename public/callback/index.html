@@ -14,9 +14,10 @@ if (params) {
   if (state.startsWith('dmg_')) {
     // Strip the dmg_ prefix before forwarding so the state matches
     sp.set('state', state.slice(4));
-    window.location.replace('http://localhost:38901/callback?' + sp.toString());
+    window.location.replace('http://127.0.0.1:38901/callback?' + sp.toString());
   } else {
-    window.location.replace('http://localhost:3000/' + params);
+    // Return to this app’s origin (Vercel or localhost:any-port) with ?code=… — do not hardcode :3000.
+    window.location.replace(window.location.origin + '/' + window.location.search);
   }
 } else {
   document.body.textContent = 'Missing callback parameters.';

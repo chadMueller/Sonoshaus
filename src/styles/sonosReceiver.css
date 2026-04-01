@@ -2264,6 +2264,15 @@
   user-select: all;
 }
 
+.cd-spotify-setup-note {
+  opacity: 0.92;
+}
+
+.cd-spotify-setup-note code {
+  font-size: 8px;
+  user-select: all;
+}
+
 .cd-spotify-setup-input {
   display: flex;
   gap: 8px;

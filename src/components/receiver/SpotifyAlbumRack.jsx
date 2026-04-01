@@ -3,6 +3,7 @@ import {
   startSpotifyLogin,
   clearStoredTokens,
   getSpotifyConfig,
+  getSpotifyDashboardRedirectUri,
   isSpotifyAuthed,
   setSpotifyClientId,
   getStoredClientId,
@@ -99,6 +100,27 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
       if (loaded) setSpotifyAuthed(true);
     });
   }, []);
+
+  // DMG: keep polling briefly so “sign in from web UI first” can complete after the app is open.
+  useEffect(() => {
+    if (!window.sonohaus?.isElectron) return;
+    if (spotifyAuthed || !clientId) return;
+    let n = 0;
+    const id = setInterval(() => {
+      n += 1;
+      if (n > 45) {
+        clearInterval(id);
+        return;
+      }
+      loadSharedTokens().then((loaded) => {
+        if (loaded) {
+          setSpotifyAuthed(true);
+          clearInterval(id);
+        }
+      });
+    }, 4000);
+    return () => clearInterval(id);
+  }, [spotifyAuthed, clientId]);
 
   useEffect(() => {
     setSpotifyAuthed(isSpotifyAuthed());
@@ -212,7 +234,11 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
         setSpotifyAuthed(true);
       } catch (err) {
         if (isInitial) {
-          setError(err?.message || 'Failed to load Spotify albums');
+          const msg =
+            err?.code === 'SPOTIFY_NOT_AUTHED' && window.sonohaus?.isElectron
+              ? 'Tap Connect to sign in with Spotify.'
+              : err?.message || 'Failed to load Spotify albums';
+          setError(msg);
           setStatus('error');
         } else {
           console.error('[SpotifyAlbumRack] load more failed:', err);
@@ -225,11 +251,14 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
     [],
   );
 
+  // Only load albums after we have tokens (avoid racing loadSharedTokens / showing “Not authenticated”).
   useEffect(() => {
     if (!clientId) return;
+    if (!spotifyAuthed && !isSpotifyAuthed()) return;
+    if (!isSpotifyAuthed()) return;
     fetchNextPage({ reset: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId]);
+  }, [clientId, spotifyAuthed]);
 
   // Listen for Electron OAuth success
   useEffect(() => {
@@ -712,7 +741,20 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
           <div className="cd-spotify-setup">
             <div className="cd-spotify-setup-steps">
               <p>1. Go to developer.spotify.com/dashboard and create an app</p>
-              <p>2. Add this redirect URI: <strong>{canUseSpotify() && window.sonohaus?.isElectron ? 'http://localhost:38901/callback' : `${window.location.origin}/`}</strong></p>
+              <p>
+                2. Add this redirect URI to the Spotify app (must match exactly):{' '}
+                <strong>
+                  {window.sonohaus?.isElectron
+                    ? getSpotifyDashboardRedirectUri()
+                    : `${window.location.origin}/`}
+                </strong>
+              </p>
+              {window.sonohaus?.isElectron ? (
+                <p className="cd-spotify-setup-note">
+                  The desktop app starts the Spotify helper on <code>127.0.0.1:38901</code> automatically. Add the URI
+                  above once in the Spotify dashboard (builds can ship with a Client ID so testers skip this screen).
+                </p>
+              ) : null}
               <p>3. Copy your Client ID and paste it below</p>
             </div>
             <div className="cd-spotify-setup-input">
@@ -770,6 +812,14 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
             <div className="cd-empty">Connecting to your collection...</div>
           ) : error ? (
             <div className="cd-empty">{error}</div>
+            ) : contentMode === 'albums' && !spotifyAuthed && albums.length === 0 ? (
+            <div className="cd-empty">
+              {!clientId
+                ? 'Open Setup and paste your Spotify Client ID from the Spotify developer dashboard.'
+                : window.sonohaus?.isElectron
+                  ? 'Tap Connect to sign in with Spotify in your browser. When you see “Connected”, return to Sonohaus — your library loads automatically.'
+                  : 'Tap Connect to sign in with Spotify and load your library.'}
+            </div>
             ) : contentMode === 'albums' && !hasMore && albums.length === 0 ? (
             <div className="cd-empty">No albums found</div>
             ) : filtered.length === 0 && query.trim() && contentMode === 'albums' && !hasMore ? (

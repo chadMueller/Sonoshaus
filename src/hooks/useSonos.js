@@ -39,6 +39,9 @@ export function useSonos() {
 
   const selectedRoomRef = useRef(selectedRoom);
   selectedRoomRef.current = selectedRoom;
+  /** Mirrors roomLastActiveAt for scanCoordinatorActivity without putting that state in useCallback deps (would retrigger the zone-scan effect every scan). */
+  const roomLastActiveAtRef = useRef(roomLastActiveAt);
+  roomLastActiveAtRef.current = roomLastActiveAt;
   const userSelectedRoomRef = useRef(false);
   const volumeCommitTimerRef = useRef(null);
   const roomVolumeTimersRef = useRef({});
@@ -147,7 +150,7 @@ export function useSonos() {
 
       // Otherwise choose most recently active; if none playing, fall back to first coordinator.
       const activityPairs = results
-        .map((r) => [r.roomName, roomLastActiveAt[r.roomName] || 0, r.state?.playbackState])
+        .map((r) => [r.roomName, roomLastActiveAtRef.current[r.roomName] || 0, r.state?.playbackState])
         .sort((a, b) => b[1] - a[1]);
       const bestActive = activityPairs.find((p) => p[1] > 0 && p[2] === 'PLAYING')?.[0] || activityPairs[0]?.[0] || null;
       const target = bestActive || coordinators[0] || null;
@@ -155,8 +158,11 @@ export function useSonos() {
         setSelectedRoom(target);
       }
     },
-    [getCoordinatorRooms, roomLastActiveAt],
+    [getCoordinatorRooms],
   );
+
+  const scanCoordinatorActivityRef = useRef(scanCoordinatorActivity);
+  scanCoordinatorActivityRef.current = scanCoordinatorActivity;
 
   // Fetch zones every 30s
   useEffect(() => {
@@ -173,13 +179,13 @@ export function useSonos() {
     };
   }, [refreshZones]);
 
-  // Scan coordinator activity once on mount to auto-select a room. No polling.
+  // Scan coordinator activity when the zone list changes (not when scanCoordinatorActivity identity changes — that used to re-run after every scan and spam getState).
   useEffect(() => {
     if (!zones || zones.length === 0) return;
     if (userSelectedRoomRef.current) return;
 
-    scanCoordinatorActivity(zones, { allowAutoSelect: true }).catch(() => {});
-  }, [zones, scanCoordinatorActivity]);
+    scanCoordinatorActivityRef.current(zones, { allowAutoSelect: true }).catch(() => {});
+  }, [zones]);
 
   useEffect(() => () => {
     if (volumeCommitTimerRef.current) {

@@ -8,6 +8,26 @@ const VERIFIER_KEY = 'sonohaus.spotify.pkce.verifier.v1';
 const STATE_KEY = 'sonohaus.spotify.pkce.state.v1';
 
 const TOKEN_SYNC_URL = 'http://localhost:38901/tokens';
+const TOKEN_SYNC_BASE = 'http://127.0.0.1:38901';
+
+/** Spotify redirect for DMG — must match exactly in the Spotify Developer Dashboard (add once per app). */
+export const ELECTRON_SPOTIFY_REDIRECT_URI = 'http://127.0.0.1:38901/callback';
+
+/** URI to register in Spotify Dashboard for the current environment (Electron = localhost callback). */
+export function getSpotifyDashboardRedirectUri() {
+  if (typeof window !== 'undefined' && window.sonohaus?.isElectron) {
+    return ELECTRON_SPOTIFY_REDIRECT_URI;
+  }
+  return (
+    String(import.meta.env.VITE_SPOTIFY_REDIRECT_URI || '').trim() ||
+    `${typeof window !== 'undefined' ? window.location.origin : ''}/`
+  );
+}
+
+/** Hint for “sign in from the web UI first” (dev server or preview port). */
+export function getSpotifyWebUiOrigin() {
+  return String(import.meta.env.VITE_SPOTIFY_WEB_UI_ORIGIN || 'http://localhost:3000').trim();
+}
 
 export const SPOTIFY_AUTH_SUCCESS_EVENT = 'sonohaus:spotify-auth-success';
 
@@ -153,30 +173,30 @@ export async function startSpotifyLogin({ scopes = ['user-library-read'] } = {})
     if (!window.sonohaus?.openExternal) {
       throw new Error('Electron bridge not available. Restart the app and try again.');
     }
-    // Use the Vercel callback page as the redirect URI (Spotify requires HTTPS).
-    // The Vercel page detects the "dmg_" state prefix and redirects to the local
-    // token-sync server which handles the code exchange.
-    const vercelRedirect = String(import.meta.env.VITE_SPOTIFY_REDIRECT_URI || '').trim();
-    if (!vercelRedirect) {
-      throw new Error('Missing VITE_SPOTIFY_REDIRECT_URI.');
-    }
+    // DMG embeds the token server and uses a localhost redirect (allowed by Spotify for dev).
+    // No Vercel hop — user taps Connect, browser returns to 127.0.0.1:38901/callback.
+    const dmgRedirect = ELECTRON_SPOTIFY_REDIRECT_URI;
 
-    // Send the PKCE verifier to the token server so it can exchange the code.
-    // redirect_uri must match what was sent to Spotify (the Vercel URL).
-    await fetch(`${TOKEN_SYNC_URL.replace('/tokens', '')}/auth/prepare`, {
+    const prepareRes = await fetch(`${TOKEN_SYNC_BASE}/auth/prepare`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         verifier,
         clientId,
-        redirectUri: vercelRedirect,
+        redirectUri: dmgRedirect,
       }),
     });
+    if (!prepareRes.ok) {
+      const detail = await prepareRes.text().catch(() => '');
+      throw new Error(
+        `Could not reach the Spotify helper on port 38901 (${prepareRes.status}). Quit other apps using that port or restart Sonohaus. ${detail}`,
+      );
+    }
 
     const browserParams = new URLSearchParams({
       client_id: clientId,
       response_type: 'code',
-      redirect_uri: vercelRedirect,
+      redirect_uri: dmgRedirect,
       code_challenge_method: 'S256',
       code_challenge: challenge,
       state: `dmg_${state}`,

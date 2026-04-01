@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { startSpotifyTokenServer } = require('./spotify-token-server.cjs');
 
 const isDev = Boolean(process.env.ELECTRON_START_URL);
 const shouldFullscreen = String(process.env.KIOSK_FULLSCREEN || 'false').toLowerCase() === 'true';
@@ -87,7 +88,8 @@ ipcMain.handle('sonohaus:open-bridge-installer', async () => {
   }
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await startSpotifyTokenServer();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
