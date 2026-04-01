@@ -6,6 +6,33 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const isDev = Boolean(process.env.ELECTRON_START_URL);
 const shouldFullscreen = String(process.env.KIOSK_FULLSCREEN || 'false').toLowerCase() === 'true';
 
+function getTokenServerPath() {
+  if (isDev) {
+    return path.join(__dirname, '..', 'scripts', 'token-server.cjs');
+  }
+  return path.join(process.resourcesPath, 'bridge-installer', 'token-server.cjs');
+}
+
+let tokenServerProcess = null;
+
+function startTokenServer() {
+  const serverPath = getTokenServerPath();
+  if (!fs.existsSync(serverPath)) return;
+  tokenServerProcess = spawn(process.execPath, [serverPath], {
+    stdio: 'ignore',
+    env: { ...process.env, HOME: process.env.HOME || '/tmp' },
+  });
+  tokenServerProcess.on('error', () => {});
+  tokenServerProcess.on('exit', () => { tokenServerProcess = null; });
+}
+
+function stopTokenServer() {
+  if (tokenServerProcess) {
+    tokenServerProcess.kill();
+    tokenServerProcess = null;
+  }
+}
+
 function getInstallerPath() {
   if (isDev) {
     return path.join(__dirname, '..', 'scripts', 'install-bridge.command');
@@ -88,6 +115,7 @@ ipcMain.handle('sonohaus:open-bridge-installer', async () => {
 });
 
 app.whenReady().then(() => {
+  startTokenServer();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -100,4 +128,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('will-quit', () => {
+  stopTokenServer();
 });
