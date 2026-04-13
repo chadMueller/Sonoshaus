@@ -12,6 +12,10 @@ BRIDGE_DIR="$HOME/Library/Application Support/Sonohaus/bridge"
 BRIDGE_REPO="https://github.com/jishi/node-sonos-http-api.git"
 LABEL="com.sonohaus.bridge"
 PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
+WATCHDOG_LABEL="com.sonohaus.bridge-watchdog"
+WATCHDOG_PLIST="$HOME/Library/LaunchAgents/${WATCHDOG_LABEL}.plist"
+WATCHDOG_SRC="${SCRIPT_DIR}/bridge-watchdog.sh"
+WATCHDOG_DEST="$HOME/Library/Application Support/Sonohaus/bridge-watchdog.sh"
 TOKEN_LABEL="com.sonohaus.token-server"
 TOKEN_PLIST="$HOME/Library/LaunchAgents/${TOKEN_LABEL}.plist"
 TOKEN_SERVER_SRC="${SCRIPT_DIR}/token-server.cjs"
@@ -124,6 +128,38 @@ EOF
 # --- Start the bridge ---
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
 echo "  Bridge installed and starting..."
+
+# --- Bridge watchdog (auto-restarts bridge when speaker discovery is lost) ---
+echo "  Setting up bridge watchdog..."
+cp "$WATCHDOG_SRC" "$WATCHDOG_DEST"
+chmod +x "$WATCHDOG_DEST"
+
+cat > "$WATCHDOG_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${WATCHDOG_LABEL}</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>120</integer>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>${WATCHDOG_DEST}</string>
+  </array>
+  <key>StandardOutPath</key>
+  <string>${LOG_DIR}/watchdog.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>${LOG_DIR}/watchdog.err.log</string>
+</dict>
+</plist>
+EOF
+
+launchctl bootstrap "gui/$(id -u)" "$WATCHDOG_PLIST"
+echo "  Watchdog installed (checks bridge health every 2 minutes)."
 
 # --- Token sync server (shares Spotify auth between web UI and DMG) ---
 echo "  Setting up token sync server..."

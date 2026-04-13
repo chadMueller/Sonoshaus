@@ -10,6 +10,8 @@ set -euo pipefail
 BRIDGE_DIR="$HOME/Library/Application Support/Sonohaus/bridge"
 LABEL="com.sonohaus.bridge"
 PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
+WATCHDOG_LABEL="com.sonohaus.bridge-watchdog"
+WATCHDOG_PLIST="$HOME/Library/LaunchAgents/${WATCHDOG_LABEL}.plist"
 TOKEN_LABEL="com.sonohaus.token-server"
 TOKEN_PLIST="$HOME/Library/LaunchAgents/${TOKEN_LABEL}.plist"
 LOG_DIR="$HOME/Library/Logs/Sonohaus"
@@ -27,10 +29,11 @@ if [ ! -f "$PLIST" ]; then
 fi
 
 # --- Stop services ---
-echo "  Stopping bridge and token server..."
+echo "  Stopping bridge, watchdog, and token server..."
+launchctl bootout "gui/$(id -u)" "$WATCHDOG_PLIST" >/dev/null 2>&1 || true
 launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
 launchctl bootout "gui/$(id -u)" "$TOKEN_PLIST" >/dev/null 2>&1 || true
-rm -f "$PLIST" "$TOKEN_PLIST"
+rm -f "$PLIST" "$WATCHDOG_PLIST" "$TOKEN_PLIST"
 echo "  Services removed."
 
 # --- Ask about files ---
