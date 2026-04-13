@@ -73,31 +73,6 @@ export function SonosReceiverView({ spotifyAuthError }) {
       .map((name) => ({ key: name, label: name }));
   }, [sonos.roomNames]);
 
-  // Zone EQ colors: rooms in the same zone get the same color
-  const ZONE_COLORS = [
-    'rgba(229, 141, 61, 0.85)',  // gold/amber
-    'rgba(90, 190, 90, 0.85)',   // green
-    'rgba(80, 160, 220, 0.85)',  // blue
-    'rgba(190, 90, 170, 0.85)',  // magenta
-    'rgba(70, 195, 195, 0.85)',  // cyan
-    'rgba(210, 80, 70, 0.85)',   // red
-  ];
-
-  const roomEqColor = useMemo(() => {
-    const map = {};
-    const zones = sonos.zones || [];
-    zones.forEach((zone, zoneIdx) => {
-      const color = ZONE_COLORS[zoneIdx % ZONE_COLORS.length];
-      const coord = zone?.coordinator?.roomName;
-      if (coord) map[coord] = color;
-      const members = Array.isArray(zone?.members) ? zone.members : [];
-      members.forEach((m) => {
-        if (m?.roomName) map[m.roomName] = color;
-      });
-    });
-    return map;
-  }, [sonos.zones]);
-
   const renderRackSegment = (rackId) => {
     switch (rackId) {
       case 'receiver':
@@ -215,20 +190,6 @@ export function SonosReceiverView({ spotifyAuthError }) {
                           onChange={(nextVolume) => sonos.setRoomVolume(room.key, nextVolume)}
                         />
                       </div>
-                      {sonos.roomStates?.[room.key]?.playbackState === 'PLAYING' ? (
-                        <div
-                          className="room-activity-eq"
-                          aria-label="Playing"
-                          style={{ '--eq-color': roomEqColor[room.key] || ZONE_COLORS[0] }}
-                        >
-                          <span className="eq-bar b1" />
-                          <span className="eq-bar b2" />
-                          <span className="eq-bar b3" />
-                          <span className="eq-bar b4" />
-                        </div>
-                      ) : (
-                        <div className="room-activity-eq room-activity-eq--idle" aria-hidden="true" />
-                      )}
                     </div>
                   ))}
                 </div>
