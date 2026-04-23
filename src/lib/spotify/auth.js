@@ -142,7 +142,9 @@ async function pollForSharedTokens(timeoutMs = 120000, intervalMs = 2000) {
   throw new Error('Spotify login timed out. Complete the login in your browser and try again.');
 }
 
-export async function startSpotifyLogin({ scopes = ['user-library-read'] } = {}) {
+export async function startSpotifyLogin({
+  scopes = ['user-library-read', 'playlist-read-private', 'playlist-read-collaborative'],
+} = {}) {
   const { clientId, redirectUri } = getSpotifyConfig();
   if (!clientId) throw new Error('Missing VITE_SPOTIFY_CLIENT_ID');
 

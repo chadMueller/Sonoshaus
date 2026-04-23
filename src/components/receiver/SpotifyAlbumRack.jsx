@@ -10,8 +10,8 @@ import {
   loadSharedTokens,
   SPOTIFY_AUTH_SUCCESS_EVENT,
 } from '../../lib/spotify/auth.js';
-import { getAlbumTracksAll, getSavedAlbumsPage } from '../../lib/spotify/api.js';
-import { clearQueue, playSpotifyTrackNow, queueSpotifyTrack, shuffleOff } from '../../api/sonos.js';
+import { getAlbumTracksAll, getMyPlaylistsPage, getSavedAlbumsPage } from '../../lib/spotify/api.js';
+import { clearQueue, playSpotifyTrackNow, playSpotifyUriNow, queueSpotifyTrack, shuffleOff } from '../../api/sonos.js';
 
 const ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
@@ -56,14 +56,19 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [albums, setAlbums] = useState([]);
+  const [spotifyPlaylists, setSpotifyPlaylists] = useState([]);
   const [total, setTotal] = useState(null);
+  const [spotifyPlaylistsTotal, setSpotifyPlaylistsTotal] = useState(null);
   const [offset, setOffset] = useState(0);
+  const [spotifyPlaylistsOffset, setSpotifyPlaylistsOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [spotifyPlaylistsHasMore, setSpotifyPlaylistsHasMore] = useState(false);
   const [query, setQuery] = useState('');
   const [viewMode, setViewMode] = useState('rack');
-  const [contentMode, setContentMode] = useState('albums'); // albums | favorites | playlists
+  const [contentMode, setContentMode] = useState('albums'); // albums | spotify-playlists | favorites | playlists
   const [sortMode, setSortMode] = useState('alpha'); // alpha | recent
   const [alphaSeek, setAlphaSeek] = useState(null); // { letter, startedAt }
+  const isSpotifyLibraryMode = contentMode === 'albums' || contentMode === 'spotify-playlists';
 
   const [enqueueState, setEnqueueState] = useState(null);
   const enqueueAbortRef = useRef({ aborted: false });
@@ -76,14 +81,16 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
   const hasMoreRef = useRef(false);
   const loadingMoreRef = useRef(false);
   const offsetRef = useRef(0);
+  const spotifyPlaylistsOffsetRef = useRef(0);
   const { clientId } = getSpotifyConfig();
   const [spotifyAuthed, setSpotifyAuthed] = useState(() => isSpotifyAuthed());
   const [showSpotifySetup, setShowSpotifySetup] = useState(false);
   const [clientIdInput, setClientIdInput] = useState(() => getStoredClientId());
 
-  hasMoreRef.current = hasMore;
+  hasMoreRef.current = contentMode === 'spotify-playlists' ? spotifyPlaylistsHasMore : hasMore;
   loadingMoreRef.current = loadingMore;
   offsetRef.current = offset;
+  spotifyPlaylistsOffsetRef.current = spotifyPlaylistsOffset;
 
   useEffect(() => {
     if (spotifyAuthError) {
@@ -138,6 +145,16 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
     setSortMode('alpha');
   }, [contentMode]);
 
+  // Load Spotify playlists on-demand when the user switches tabs.
+  useEffect(() => {
+    if (contentMode !== 'spotify-playlists') return;
+    if (!clientId) return;
+    if (!spotifyAuthed && !isSpotifyAuthed()) return;
+    if (spotifyPlaylists.length > 0) return;
+    fetchNextPage({ reset: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contentMode, clientId, spotifyAuthed]);
+
   const favoriteItems = useMemo(() => {
     const src = Array.isArray(sonosFavorites) ? sonosFavorites : [];
     return src
@@ -171,8 +188,9 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
   const currentItems = useMemo(() => {
     if (contentMode === 'favorites') return favoriteItems;
     if (contentMode === 'playlists') return playlistItems;
+    if (contentMode === 'spotify-playlists') return spotifyPlaylists;
     return albums;
-  }, [contentMode, favoriteItems, playlistItems, albums]);
+  }, [contentMode, favoriteItems, playlistItems, spotifyPlaylists, albums]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -183,29 +201,39 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
     });
   }, [currentItems, query]);
 
-  const sortedAlbums = useMemo(() => {
-    if (contentMode !== 'albums') return filtered;
-    if (sortMode === 'recent') {
-      return [...filtered].sort((a, b) => {
-        const ta = a.addedAt ? Date.parse(a.addedAt) : 0;
-        const tb = b.addedAt ? Date.parse(b.addedAt) : 0;
-        if (tb !== ta) return tb - ta;
-        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-      });
-    }
-    return [...filtered].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-  }, [filtered, contentMode, sortMode]);
+  const sortedItems = useMemo(() => {
+    if (!isSpotifyLibraryMode) return filtered;
 
-  const firstAlbumIdByLetter = useMemo(() => {
+    if (sortMode === 'recent') {
+      // Albums have a true "recent" sort (addedAt). Playlists are already returned in a meaningful order by Spotify,
+      // so "Recent" keeps the API ordering for consistent browsing.
+      if (contentMode === 'albums') {
+        return [...filtered].sort((a, b) => {
+          const ta = a.addedAt ? Date.parse(a.addedAt) : 0;
+          const tb = b.addedAt ? Date.parse(b.addedAt) : 0;
+          if (tb !== ta) return tb - ta;
+          return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+        });
+      }
+      return filtered;
+    }
+
+    return [...filtered].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  }, [filtered, isSpotifyLibraryMode, contentMode, sortMode]);
+
+  const firstIdByLetter = useMemo(() => {
     const map = new Map();
-    for (const album of sortedAlbums) {
-      const letter = alphaBucket(album.name);
+    if (!isSpotifyLibraryMode) return map;
+    if (sortMode === 'recent') return map;
+
+    for (const item of sortedItems) {
+      const letter = alphaBucket(item.name);
       if (!map.has(letter)) {
-        map.set(letter, album.id);
+        map.set(letter, item.id);
       }
     }
     return map;
-  }, [sortedAlbums]);
+  }, [sortedItems, isSpotifyLibraryMode, sortMode]);
 
   const fetchNextPage = useCallback(
     async ({ reset = false } = {}) => {
@@ -222,14 +250,31 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
       setError(null);
 
       try {
-        const nextOffset = reset ? 0 : offsetRef.current;
-        const res = await getSavedAlbumsPage({ limit: 50, offset: nextOffset });
-        const newOffset = res.offset + res.albums.length;
-        setTotal(res.total);
-        setOffset(newOffset);
-        offsetRef.current = newOffset;
-        setHasMore(!!res.hasMore);
-        setAlbums((prev) => (reset ? res.albums : [...prev, ...res.albums]));
+        const isSpotifyPlaylists = contentMode === 'spotify-playlists';
+        const nextOffset = reset ? 0 : isSpotifyPlaylists ? spotifyPlaylistsOffsetRef.current : offsetRef.current;
+
+        if (isSpotifyPlaylists) {
+          const res = await getMyPlaylistsPage({ limit: 50, offset: nextOffset });
+          const newOffset = res.offset + res.playlists.length;
+          setSpotifyPlaylistsTotal(res.total);
+          setSpotifyPlaylistsOffset(newOffset);
+          spotifyPlaylistsOffsetRef.current = newOffset;
+          setSpotifyPlaylistsHasMore(!!res.hasMore);
+          const normalized = res.playlists.map((p) => ({
+            ...p,
+            artistName: p.ownerName ? `${p.ownerName}${p.trackCount != null ? ` · ${p.trackCount} tracks` : ''}` : '',
+          }));
+          setSpotifyPlaylists((prev) => (reset ? normalized : [...prev, ...normalized]));
+        } else {
+          const res = await getSavedAlbumsPage({ limit: 50, offset: nextOffset });
+          const newOffset = res.offset + res.albums.length;
+          setTotal(res.total);
+          setOffset(newOffset);
+          offsetRef.current = newOffset;
+          setHasMore(!!res.hasMore);
+          setAlbums((prev) => (reset ? res.albums : [...prev, ...res.albums]));
+        }
+
         setStatus('ready');
         setSpotifyAuthed(true);
       } catch (err) {
@@ -237,7 +282,8 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
           const msg =
             err?.code === 'SPOTIFY_NOT_AUTHED' && window.sonohaus?.isElectron
               ? 'Tap Connect to sign in with Spotify.'
-              : err?.message || 'Failed to load Spotify albums';
+              : err?.message ||
+                (contentMode === 'spotify-playlists' ? 'Failed to load Spotify playlists' : 'Failed to load Spotify albums');
           setError(msg);
           setStatus('error');
         } else {
@@ -248,7 +294,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
         fetchInFlightRef.current = false;
       }
     },
-    [],
+    [contentMode],
   );
 
   // Only load albums after we have tokens (avoid racing loadSharedTokens / showing “Not authenticated”).
@@ -295,15 +341,31 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
 
     try {
       while (hasMoreRef.current) {
-        const curOffset = offsetRef.current;
-        const res = await getSavedAlbumsPage({ limit: 50, offset: curOffset });
-        const newOffset = res.offset + res.albums.length;
-        offsetRef.current = newOffset;
-        setOffset(newOffset);
-        setTotal(res.total);
-        setHasMore(!!res.hasMore);
-        hasMoreRef.current = !!res.hasMore;
-        setAlbums((prev) => [...prev, ...res.albums]);
+        if (contentMode === 'spotify-playlists') {
+          const curOffset = spotifyPlaylistsOffsetRef.current;
+          const res = await getMyPlaylistsPage({ limit: 50, offset: curOffset });
+          const newOffset = res.offset + res.playlists.length;
+          spotifyPlaylistsOffsetRef.current = newOffset;
+          setSpotifyPlaylistsOffset(newOffset);
+          setSpotifyPlaylistsTotal(res.total);
+          setSpotifyPlaylistsHasMore(!!res.hasMore);
+          hasMoreRef.current = !!res.hasMore;
+          const normalized = res.playlists.map((p) => ({
+            ...p,
+            artistName: p.ownerName ? `${p.ownerName}${p.trackCount != null ? ` · ${p.trackCount} tracks` : ''}` : '',
+          }));
+          setSpotifyPlaylists((prev) => [...prev, ...normalized]);
+        } else {
+          const curOffset = offsetRef.current;
+          const res = await getSavedAlbumsPage({ limit: 50, offset: curOffset });
+          const newOffset = res.offset + res.albums.length;
+          offsetRef.current = newOffset;
+          setOffset(newOffset);
+          setTotal(res.total);
+          setHasMore(!!res.hasMore);
+          hasMoreRef.current = !!res.hasMore;
+          setAlbums((prev) => [...prev, ...res.albums]);
+        }
       }
     } catch (err) {
       console.error('[SpotifyAlbumRack] loadAll failed:', err);
@@ -316,7 +378,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
 
   const scrollToLetter = useCallback(
     (letter) => {
-      const id = firstAlbumIdByLetter.get(letter);
+      const id = firstIdByLetter.get(letter);
       if (!id) return;
       const el = document.getElementById(`cd-album-${id}`);
       if (!el) return;
@@ -326,34 +388,34 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
         block: 'nearest',
       });
     },
-    [firstAlbumIdByLetter, viewMode],
+    [firstIdByLetter, viewMode],
   );
 
   const ensureLetterLoaded = useCallback(
     (letter) => {
-      if (contentMode !== 'albums') return;
+      if (!isSpotifyLibraryMode) return;
       if (sortMode === 'recent') return;
       if (!letter) return;
-      if (firstAlbumIdByLetter.has(letter)) {
+      if (firstIdByLetter.has(letter)) {
         scrollToLetter(letter);
         return;
       }
-      // Load all remaining albums, then scroll when the letter appears
+      // Load all remaining items, then scroll when the letter appears
       setAlphaSeek({ letter, startedAt: Date.now() });
       loadAllRemaining();
     },
-    [contentMode, sortMode, firstAlbumIdByLetter, scrollToLetter, loadAllRemaining],
+    [isSpotifyLibraryMode, sortMode, firstIdByLetter, scrollToLetter, loadAllRemaining],
   );
 
   useEffect(() => {
     if (!alphaSeek) return;
-    if (contentMode !== 'albums' || sortMode === 'recent') {
+    if (!isSpotifyLibraryMode || sortMode === 'recent') {
       setAlphaSeek(null);
       return;
     }
 
     const { letter, startedAt } = alphaSeek;
-    if (firstAlbumIdByLetter.has(letter)) {
+    if (firstIdByLetter.has(letter)) {
       scrollToLetter(letter);
       setAlphaSeek(null);
       return;
@@ -371,7 +433,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
 
     const t = setTimeout(() => tryFetchMore(), 150);
     return () => clearTimeout(t);
-  }, [alphaSeek, contentMode, sortMode, firstAlbumIdByLetter, scrollToLetter, tryFetchMore, albums.length]);
+  }, [alphaSeek, isSpotifyLibraryMode, sortMode, firstIdByLetter, scrollToLetter, tryFetchMore, albums.length, spotifyPlaylists.length]);
 
   // Virtualization: track scroll position to render only visible album tiles
   const TILE_WIDTH = 212; // 200px tile + 12px gap
@@ -400,7 +462,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
   }, [viewMode, contentMode, sortMode]);
 
   useEffect(() => {
-    if (contentMode !== 'albums') return;
+    if (contentMode !== 'albums' && contentMode !== 'spotify-playlists') return;
     if (viewMode !== 'rack') return;
     const root = rackScrollRef.current;
     const target = rackSentinelRef.current;
@@ -417,7 +479,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
   }, [viewMode, tryFetchMore, hasMore]);
 
   useEffect(() => {
-    if (contentMode !== 'albums') return;
+    if (contentMode !== 'albums' && contentMode !== 'spotify-playlists') return;
     if (viewMode !== 'carousel') return;
     const root = carouselScrollRef.current;
     const target = carouselSentinelRef.current;
@@ -433,9 +495,9 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
     return () => obs.disconnect();
   }, [viewMode, tryFetchMore, hasMore]);
 
-  // When user starts searching, load all remaining albums so search covers the full library
+  // When user starts searching, load all remaining items so search covers the full library
   useEffect(() => {
-    if (contentMode !== 'albums') return;
+    if (contentMode !== 'albums' && contentMode !== 'spotify-playlists') return;
     if (!query.trim()) return;
     if (!hasMoreRef.current) return;
 
@@ -446,7 +508,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
     setError(null);
     try {
       await startSpotifyLogin({
-        scopes: ['user-library-read'],
+        scopes: ['user-library-read', 'playlist-read-private', 'playlist-read-collaborative'],
       });
     } catch (err) {
       setError(err?.message || 'Spotify connection failed');
@@ -458,9 +520,13 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
     clearStoredTokens();
     setSpotifyAuthed(false);
     setAlbums([]);
+    setSpotifyPlaylists([]);
     setTotal(null);
+    setSpotifyPlaylistsTotal(null);
     setOffset(0);
+    setSpotifyPlaylistsOffset(0);
     setHasMore(false);
+    setSpotifyPlaylistsHasMore(false);
     setQuery('');
     setEnqueueState(null);
     setStatus('idle');
@@ -533,6 +599,50 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
     }
   };
 
+  const enqueuePlaylist = async (playlist) => {
+    if (!selectedRoom) {
+      setError('Select a room to play');
+      setStatus('error');
+      return;
+    }
+
+    const uri = playlist?.uri;
+    if (!uri) {
+      setError('That playlist is missing a Spotify URI');
+      setStatus('error');
+      return;
+    }
+
+    enqueueAbortRef.current.aborted = false;
+    setEnqueueState({ albumId: playlist.id, done: 0, total: 0, phase: 'Replacing queue...' });
+
+    try {
+      console.info('[SpotifyAlbumRack] playlist click:', playlist);
+
+      await clearQueue(selectedRoom);
+      if (enqueueAbortRef.current.aborted) return;
+
+      await shuffleOff(selectedRoom);
+      if (enqueueAbortRef.current.aborted) return;
+
+      setEnqueueState({ albumId: playlist.id, done: 0, total: 0, phase: 'Playing...' });
+      console.info('[SpotifyAlbumRack] playlist play now:', { room: selectedRoom, uri });
+
+      await playSpotifyUriNow(selectedRoom, uri);
+      if (enqueueAbortRef.current.aborted) return;
+
+      setEnqueueState({ albumId: playlist.id, done: 0, total: 0, phase: 'Ready' });
+      await sleep(450);
+      setEnqueueState(null);
+      setStatus('ready');
+    } catch (err) {
+      console.error('[SpotifyAlbumRack] playlist enqueue error:', err);
+      setEnqueueState(null);
+      setError(err?.message || 'Failed to play playlist');
+      setStatus('error');
+    }
+  };
+
   const enqueueLabel = enqueueState
     ? `${enqueueState.phase} ${enqueueState.total ? `${enqueueState.done}/${enqueueState.total}` : ''}`.trim()
     : null;
@@ -547,6 +657,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
       .toUpperCase();
     const active = enqueueState?.albumId === album.id;
     const isCarousel = variant === 'carousel';
+    const showOverlay = contentMode === 'albums' || contentMode === 'spotify-playlists';
 
     return (
       <button
@@ -558,6 +669,10 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
         onClick={() => {
           if (contentMode === 'albums') {
             enqueueAlbum(album);
+            return;
+          }
+          if (contentMode === 'spotify-playlists') {
+            enqueuePlaylist(album);
             return;
           }
           if (!selectedRoom) {
@@ -578,7 +693,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
           {art ? (
             <>
               <img className="cd-cover-img" src={art} alt="" loading="lazy" />
-              {contentMode === 'albums' ? (
+              {showOverlay ? (
                 <div className="cd-overlay">
                   <div className="cd-overlay-text">
                     <span className="cd-overlay-title">{title}</span>
@@ -617,7 +732,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
   const renderAlphaNav = () => (
     <div className="cd-alpha-nav" aria-label="Jump by letter">
       {ALPHA.map((letter) => {
-        const has = firstAlbumIdByLetter.has(letter);
+        const has = firstIdByLetter.has(letter);
         return (
           <button
             key={letter}
@@ -629,7 +744,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
           </button>
         );
       })}
-      {firstAlbumIdByLetter.has('#') ? (
+      {firstIdByLetter.has('#') ? (
         <button type="button" className="cd-alpha-letter has-albums" onClick={() => ensureLetterLoaded('#')}>
           #
         </button>
@@ -656,6 +771,13 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
               </button>
               <button
                 type="button"
+                className={`cd-view-btn ${contentMode === 'spotify-playlists' ? 'active' : ''}`}
+                onClick={() => setContentMode('spotify-playlists')}
+              >
+                Playlists
+              </button>
+              <button
+                type="button"
                 className={`cd-view-btn ${contentMode === 'favorites' ? 'active' : ''}`}
                 onClick={() => setContentMode('favorites')}
               >
@@ -672,7 +794,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
           </div>
           <h2 className="cd-title cd-title-center">Library</h2>
           <div className="cd-actions cd-actions-right">
-            {contentMode === 'albums' ? (
+            {isSpotifyLibraryMode ? (
               <div className="cd-view-toggle" role="group" aria-label="Sort">
                 <button
                   type="button"
@@ -690,7 +812,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
                 </button>
               </div>
             ) : null}
-            {contentMode === 'albums' ? (
+            {isSpotifyLibraryMode ? (
               <div className="cd-view-toggle" role="group" aria-label="View mode">
                 <button
                   type="button"
@@ -708,7 +830,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
                 </button>
               </div>
             ) : null}
-            {contentMode === 'albums' ? (
+            {contentMode === 'albums' || contentMode === 'spotify-playlists' ? (
               spotifyAuthed ? (
                 <button
                   type="button"
@@ -788,15 +910,24 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
                 className="cd-search-input"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search albums / artists..."
-                aria-label="Search albums"
+                placeholder={
+                  contentMode === 'spotify-playlists'
+                    ? 'Search playlists...'
+                    : contentMode === 'albums'
+                      ? 'Search albums / artists...'
+                      : 'Search...'
+                }
+                aria-label="Search"
               />
               <div className="cd-search-hint">
-                {total != null
-                  ? `${filtered.length}/${total}${loadingMore ? ' · loading' : ''}`
-                  : albums.length > 0 || status === 'ready'
-                    ? `${filtered.length}${loadingMore ? ' · loading' : ''}`
-                    : ''}
+                {(() => {
+                  const isSpotifyList = contentMode === 'spotify-playlists';
+                  const t = isSpotifyList ? spotifyPlaylistsTotal : total;
+                  const loadedCount = isSpotifyList ? spotifyPlaylists.length : albums.length;
+                  if (t != null) return `${filtered.length}/${t}${loadingMore ? ' · loading' : ''}`;
+                  if (loadedCount > 0 || status === 'ready') return `${filtered.length}${loadingMore ? ' · loading' : ''}`;
+                  return '';
+                })()}
               </div>
             </div>
 
@@ -808,11 +939,15 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
           </div>
 
         <div className="cd-rack" role="list">
-            {contentMode === 'albums' && status === 'loading' && albums.length === 0 ? (
+            {(contentMode === 'albums' || contentMode === 'spotify-playlists') &&
+            status === 'loading' &&
+            (contentMode === 'spotify-playlists' ? spotifyPlaylists.length : albums.length) === 0 ? (
             <div className="cd-empty">Connecting to your collection...</div>
           ) : error ? (
             <div className="cd-empty">{error}</div>
-            ) : contentMode === 'albums' && !spotifyAuthed && albums.length === 0 ? (
+            ) : (contentMode === 'albums' || contentMode === 'spotify-playlists') &&
+              !spotifyAuthed &&
+              (contentMode === 'spotify-playlists' ? spotifyPlaylists.length : albums.length) === 0 ? (
             <div className="cd-empty">
               {!clientId
                 ? 'Open Setup and paste your Spotify Client ID from the Spotify developer dashboard.'
@@ -822,21 +957,25 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
             </div>
             ) : contentMode === 'albums' && !hasMore && albums.length === 0 ? (
             <div className="cd-empty">No albums found</div>
+            ) : contentMode === 'spotify-playlists' && !spotifyPlaylistsHasMore && spotifyPlaylists.length === 0 ? (
+            <div className="cd-empty">No playlists found</div>
             ) : filtered.length === 0 && query.trim() && contentMode === 'albums' && !hasMore ? (
             <div className="cd-empty">No matches in your library.</div>
+            ) : filtered.length === 0 && query.trim() && contentMode === 'spotify-playlists' && !spotifyPlaylistsHasMore ? (
+            <div className="cd-empty">No matching playlists.</div>
           ) : (
             <div className="cd-carousel-panel">
-              {contentMode === 'albums' && sortMode !== 'recent' ? renderAlphaNav() : null}
+              {isSpotifyLibraryMode && sortMode !== 'recent' ? renderAlphaNav() : null}
               {contentMode === 'albums' && filtered.length === 0 && query.trim() && hasMore ? (
                 <div className="cd-search-pending">
                   No matches in loaded albums — scroll right to load more.
                 </div>
               ) : null}
-              {contentMode === 'albums' && viewMode === 'carousel' ? (
+              {isSpotifyLibraryMode && viewMode === 'carousel' ? (
                 <div className="cd-carousel-scroll" ref={carouselScrollRef} key={`scroll-${contentMode}-${viewMode}-${sortMode}`}>
-                  {sortedAlbums.map((album) => renderAlbumTile(album, 'carousel'))}
-                  {hasMore ? <div ref={carouselSentinelRef} className="cd-rack-sentinel" aria-hidden /> : null}
-                  {contentMode === 'albums' && (loadingMore || alphaSeek) ? (
+                  {sortedItems.map((album) => renderAlbumTile(album, 'carousel'))}
+                  {hasMoreRef.current ? <div ref={carouselSentinelRef} className="cd-rack-sentinel" aria-hidden /> : null}
+                  {isSpotifyLibraryMode && (loadingMore || alphaSeek) ? (
                     <div className="cd-loading-tail" aria-live="polite">
                       {alphaSeek ? `Loading ${alphaSeek.letter}\u2026` : 'Loading\u2026'}
                     </div>
@@ -845,7 +984,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
               ) : (
                 <div className="cd-scroll" ref={rackScrollRef} key={`scroll-${contentMode}-${viewMode}-${sortMode}`}>
                   {(() => {
-                    const items = contentMode === 'albums' ? sortedAlbums : filtered;
+                    const items = isSpotifyLibraryMode ? sortedItems : filtered;
                     const totalItems = items.length;
                     const start = Math.min(rackWindow.start, totalItems);
                     const end = Math.min(rackWindow.end, totalItems);
@@ -857,12 +996,18 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
                       </>
                     );
                   })()}
-                  {contentMode === 'albums' && hasMore ? (
+                  {(contentMode === 'albums' && hasMore) ||
+                  (contentMode === 'spotify-playlists' && spotifyPlaylistsHasMore) ? (
                     <div ref={rackSentinelRef} className="cd-rack-sentinel" aria-hidden />
                   ) : null}
                   {contentMode === 'albums' && (loadingMore || alphaSeek) ? (
                     <div className="cd-loading-tail" aria-live="polite">
                       {alphaSeek ? `Loading ${alphaSeek.letter}\u2026` : 'Loading\u2026'}
+                    </div>
+                  ) : null}
+                  {contentMode === 'spotify-playlists' && loadingMore ? (
+                    <div className="cd-loading-tail" aria-live="polite">
+                      Loading\u2026
                     </div>
                   ) : null}
                 </div>
