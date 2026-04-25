@@ -31,3 +31,7 @@ bridge/
 *.local
 coverage/
 .vercel
+
+# Local raw cover sources (bundled copies live in public/ and src/assets/)
+CD_Slim.webp
+cd-case.webp
