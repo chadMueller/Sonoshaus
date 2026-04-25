@@ -14,6 +14,9 @@ import { getAlbumTracksAll, getMyPlaylistsPage, getSavedAlbumsPage } from '../..
 import { clearQueue, playSpotifyTrackNow, playSpotifyUriNow, queueSpotifyTrack, shuffleOff } from '../../api/sonos.js';
 
 const ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const MIXTAPE_OVERRIDE_KEY = 'sonohaus.spotifyPlaylists.mixedCoverOverride.v1';
+const MIXTAPE_BG_CASE_URL = new URL('../../assets/cd-case.webp', import.meta.url).href;
+const MIXTAPE_BG_SLIM_URL = new URL('../../assets/CD_Slim.webp', import.meta.url).href;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -43,6 +46,173 @@ function alphaBucket(name) {
   return '#';
 }
 
+function safeLocalStorageGet(key) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeLocalStorageSet(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // ignore
+  }
+}
+
+function hashStringToInt(value) {
+  const s = String(value || '');
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i += 1) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function escapeXml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function splitTitleLines(title, maxLen = 20) {
+  const words = String(title || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+  const lines = [];
+  let cur = '';
+  for (const w of words) {
+    const next = cur ? `${cur} ${w}` : w;
+    if (next.length <= maxLen) {
+      cur = next;
+    } else {
+      if (cur) lines.push(cur);
+      cur = w;
+    }
+    if (lines.length >= 3) break;
+  }
+  if (cur && lines.length < 3) lines.push(cur);
+  if (lines.length === 0) return ['UNTITLED'];
+  if (lines.length === 1) return [lines[0], ''];
+  return [lines[0], lines.slice(1).join(' ').slice(0, maxLen)];
+}
+
+function makeMixtapePlaceholderSvg({ seed }) {
+  const W = 512;
+  const H = 512;
+  const hue = seed % 360;
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F6F3EC"/>
+      <stop offset="100%" stop-color="#E9E3DA"/>
+    </linearGradient>
+  </defs>
+  <rect width="${W}" height="${H}" fill="url(#g)"/>
+  <rect x="10" y="10" width="${W - 20}" height="${H - 20}" rx="12" ry="12" fill="none" stroke="rgba(0,0,0,0.12)" stroke-width="2"/>
+  <circle cx="${W / 2}" cy="${H / 2}" r="110" fill="hsla(${hue}, 70%, 45%, 0.10)"/>
+  <circle cx="${W / 2}" cy="${H / 2}" r="82" fill="none" stroke="rgba(0,0,0,0.10)" stroke-width="2"/>
+</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Failed to load image: ${src}`));
+    img.src = src;
+  });
+}
+
+function jitterFromSeed(seed) {
+  // deterministic [-1, 1]
+  return ((seed % 2000) / 1000) - 1;
+}
+
+async function renderMixtapeCoverCanvas({ bgSrc, seed, name }) {
+  const W = 512;
+  const H = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No 2D context');
+
+  const bg = await loadImage(bgSrc);
+  // cover-fit
+  const scale = Math.max(W / bg.width, H / bg.height);
+  const dw = bg.width * scale;
+  const dh = bg.height * scale;
+  const dx = (W - dw) / 2;
+  const dy = (H - dh) / 2;
+  ctx.drawImage(bg, dx, dy, dw, dh);
+
+  // Text styling (marker-ish)
+  const [l1, l2] = splitTitleLines(name, 18);
+  const lines = [l1, l2].filter(Boolean);
+  const j = jitterFromSeed(seed);
+  const rot = (j * 0.8 * Math.PI) / 180; // ~±0.8deg
+
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.rotate(rot);
+  ctx.translate(-W / 2, -H / 2);
+
+  const fontStack = `"Marker Felt","Noteworthy","Bradley Hand","Comic Sans MS",cursive`;
+  ctx.fillStyle = 'rgba(0,0,0,0.86)';
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'center';
+
+  const drawLine = (text, x, y, size, maxWidth) => {
+    const t = String(text || '').trim();
+    if (!t) return;
+    let s = size;
+    ctx.font = `${s}px ${fontStack}`;
+    if (maxWidth) {
+      while (s > 26 && ctx.measureText(t).width > maxWidth) {
+        s -= 2;
+        ctx.font = `${s}px ${fontStack}`;
+      }
+    }
+    // subtle shadow/bleed
+    ctx.shadowColor = 'rgba(0,0,0,0.18)';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 1;
+    ctx.fillText(t, x, y);
+    ctx.shadowColor = 'transparent';
+    // a second pass to feel inkier
+    ctx.globalAlpha = 0.9;
+    ctx.fillText(t, x + 0.6, y - 0.2);
+    ctx.globalAlpha = 1;
+  };
+
+  // Centered on-disc title. Smaller + centered so it reads like it's written on the CD.
+  const centerX = W / 2;
+  const maxWidth = 360;
+  const topY = 142;
+  const bottomY = H - 128;
+  drawLine(lines[0], centerX, topY, 44, maxWidth);
+  if (lines[1]) {
+    drawLine(lines[1], centerX, bottomY, 44, maxWidth);
+  }
+
+  ctx.restore();
+
+  return canvas.toDataURL('image/png', 0.92);
+}
+
 export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
   selectedRoom,
   spotifyAuthError,
@@ -69,10 +239,14 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
   const [sortMode, setSortMode] = useState('alpha'); // alpha | recent
   const [alphaSeek, setAlphaSeek] = useState(null); // { letter, startedAt }
   const isSpotifyLibraryMode = contentMode === 'albums' || contentMode === 'spotify-playlists';
+  const [mixtapeCoversEnabled, setMixtapeCoversEnabled] = useState(() => safeLocalStorageGet(MIXTAPE_OVERRIDE_KEY) === '1');
 
   const [enqueueState, setEnqueueState] = useState(null);
   const enqueueAbortRef = useRef({ aborted: false });
   const fetchInFlightRef = useRef(false);
+  const mixtapeCoverCacheRef = useRef(new Map());
+  const mixtapeCoverInFlightRef = useRef(new Set());
+  const [mixtapeRenderTick, setMixtapeRenderTick] = useState(0);
   const [rackWindow, setRackWindow] = useState({ start: 0, end: 30 });
   const rackScrollRef = useRef(null);
   const rackSentinelRef = useRef(null);
@@ -145,6 +319,10 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
     setSortMode('alpha');
   }, [contentMode]);
 
+  useEffect(() => {
+    safeLocalStorageSet(MIXTAPE_OVERRIDE_KEY, mixtapeCoversEnabled ? '1' : '0');
+  }, [mixtapeCoversEnabled]);
+
   // Load Spotify playlists on-demand when the user switches tabs.
   useEffect(() => {
     if (contentMode !== 'spotify-playlists') return;
@@ -188,9 +366,39 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
   const currentItems = useMemo(() => {
     if (contentMode === 'favorites') return favoriteItems;
     if (contentMode === 'playlists') return playlistItems;
-    if (contentMode === 'spotify-playlists') return spotifyPlaylists;
+    if (contentMode === 'spotify-playlists') {
+      if (!mixtapeCoversEnabled) return spotifyPlaylists;
+      const cache = mixtapeCoverCacheRef.current;
+      const inFlight = mixtapeCoverInFlightRef.current;
+      return spotifyPlaylists.map((p) => {
+        const key = `${p.id || p.uri || p.name || ''}`;
+        let url = cache.get(key);
+        if (!url) {
+          const seed = hashStringToInt(key);
+          url = makeMixtapePlaceholderSvg({ seed });
+          cache.set(key, url);
+
+          if (!inFlight.has(key)) {
+            inFlight.add(key);
+            // Prefer the slimmer CD label background by default.
+            const bgSrc = MIXTAPE_BG_SLIM_URL;
+            renderMixtapeCoverCanvas({ bgSrc, seed, name: p.name })
+              .then((finalUrl) => {
+                cache.set(key, finalUrl);
+                inFlight.delete(key);
+                setMixtapeRenderTick((t) => t + 1);
+              })
+              .catch((err) => {
+                console.warn('[SpotifyAlbumRack] mixtape bg load failed', err);
+                inFlight.delete(key);
+              });
+          }
+        }
+        return { ...p, artworkUrl: url };
+      });
+    }
     return albums;
-  }, [contentMode, favoriteItems, playlistItems, spotifyPlaylists, albums]);
+  }, [contentMode, favoriteItems, playlistItems, spotifyPlaylists, albums, mixtapeCoversEnabled, mixtapeRenderTick]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -794,6 +1002,18 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
           </div>
           <h2 className="cd-title cd-title-center">Library</h2>
           <div className="cd-actions cd-actions-right">
+            {contentMode === 'spotify-playlists' ? (
+              <div className="cd-view-toggle" role="group" aria-label="Playlist covers">
+                <button
+                  type="button"
+                  className={`cd-view-btn ${mixtapeCoversEnabled ? 'active' : ''}`}
+                  onClick={() => setMixtapeCoversEnabled((v) => !v)}
+                  title="Override playlist covers with mixtape-style labels"
+                >
+                  Mixtape
+                </button>
+              </div>
+            ) : null}
             {isSpotifyLibraryMode ? (
               <div className="cd-view-toggle" role="group" aria-label="Sort">
                 <button
