@@ -67,8 +67,17 @@ export function setSpotifyClientId(id) {
   }
 }
 
+export function clearSpotifyClientId() {
+  localStorage.removeItem(CLIENT_ID_STORAGE_KEY);
+}
+
 export function getStoredClientId() {
   return localStorage.getItem(CLIENT_ID_STORAGE_KEY)?.trim() || '';
+}
+
+/** Whether the active Client ID comes from the user (localStorage) vs a build-time env default. */
+export function isUserSpotifyClientId() {
+  return !!getStoredClientId();
 }
 
 export function getStoredTokens() {

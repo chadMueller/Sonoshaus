@@ -31,27 +31,16 @@ Or double-click `scripts/install-bridge.command` in Finder. It will download the
 
 ### Step 3: Connect Spotify (optional)
 
-Spotify lets you browse your saved albums and queue them to Sonos. Setup takes about 2 minutes.
+Spotify library browsing requires a **free Spotify developer app** tied to your account (~2 minutes, one-time). Spotify does not allow shared credentials for public apps in dev mode.
 
-1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and create an app
-2. Add this redirect URI: `https://sonos-ten.vercel.app/callback/`
-3. Copy your **Client ID**
-4. Set up the web UI:
-   ```bash
-   cd Sonoshaus
-   cp .env.example .env
-   ```
-5. Edit `.env` and paste your Client ID as `VITE_SPOTIFY_CLIENT_ID`
-6. Start the web UI:
-   ```bash
-   npm install
-   npm run dev
-   ```
-7. Open `http://localhost:3000` in your browser
-8. Click **Connect** in the Library section and sign in with Spotify
-9. Once connected, close the web UI. Open the Sonohaus app from Applications -- your albums will be there.
+1. In Sonohaus, open the **Library** section and tap **Setup**
+2. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and create an app
+3. Add redirect URI: `http://127.0.0.1:38901/callback` (desktop) or your web URL + `/` for local dev
+4. Copy your **Client ID** into Setup, tap **Save**, then **Connect** and sign in
 
-The Spotify connection syncs automatically between the web UI and the app. You only need to connect once.
+**Release builds** use `.env.production` (empty Client ID) so every user runs Setup with their own app. For local dev, set `VITE_SPOTIFY_CLIENT_ID` in `.env`.
+
+The Spotify session syncs between the web UI and desktop app via a small token server on `localhost:38901` (installed with the bridge).
 
 ## How it works
 

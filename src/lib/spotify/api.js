@@ -2,6 +2,25 @@ import { getValidAccessToken } from './auth.js';
 
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 
+export function createSpotifyApiError(status, bodyText) {
+  const text = String(bodyText || '').trim();
+  const lower = text.toLowerCase();
+
+  if (status === 403 && lower.includes('not registered')) {
+    const error = new Error(
+      'Spotify requires your own developer app for library access. Tap Setup above, create a free app at developer.spotify.com, paste your Client ID, then Connect again.',
+    );
+    error.code = 'SPOTIFY_USER_NOT_REGISTERED';
+    return error;
+  }
+
+  const error = new Error(
+    text ? `Spotify API error (${status}): ${text}` : `Spotify API error (${status})`,
+  );
+  error.code = 'SPOTIFY_API_ERROR';
+  return error;
+}
+
 async function spotifyFetchJson(path) {
   const token = await getValidAccessToken();
   if (!token) {
@@ -18,7 +37,7 @@ async function spotifyFetchJson(path) {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Spotify API error (${response.status}): ${text}`);
+    throw createSpotifyApiError(response.status, text);
   }
 
   return response.json();

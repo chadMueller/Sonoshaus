@@ -26,8 +26,17 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function canUseSpotify() {
-  return true;
+function spotifyErrorMessage(err, contentMode) {
+  if (err?.code === 'SPOTIFY_USER_NOT_REGISTERED') {
+    return err.message;
+  }
+  if (err?.code === 'SPOTIFY_NOT_AUTHED' && window.sonohaus?.isElectron) {
+    return 'Tap Connect to sign in with Spotify.';
+  }
+  return (
+    err?.message ||
+    (contentMode === 'spotify-playlists' ? 'Failed to load Spotify playlists' : 'Failed to load Spotify albums')
+  );
 }
 
 function truncate(value, maxChars) {
@@ -225,6 +234,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
   const [status, setStatus] = useState('idle');
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
+  const [errorCode, setErrorCode] = useState(null);
   const [albums, setAlbums] = useState([]);
   const [spotifyPlaylists, setSpotifyPlaylists] = useState([]);
   const [total, setTotal] = useState(null);
@@ -256,11 +266,19 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
   const loadingMoreRef = useRef(false);
   const offsetRef = useRef(0);
   const spotifyPlaylistsOffsetRef = useRef(0);
+  const contentModeRef = useRef(contentMode);
   const { clientId } = getSpotifyConfig();
   const [spotifyAuthed, setSpotifyAuthed] = useState(() => isSpotifyAuthed());
-  const [showSpotifySetup, setShowSpotifySetup] = useState(false);
-  const [clientIdInput, setClientIdInput] = useState(() => getStoredClientId());
+  const [showSpotifySetup, setShowSpotifySetup] = useState(() => !getSpotifyConfig().clientId);
+  const [clientIdInput, setClientIdInput] = useState(() => getStoredClientId() || getSpotifyConfig().clientId);
 
+  useEffect(() => {
+    if (!clientId && isSpotifyLibraryMode) {
+      setShowSpotifySetup(true);
+    }
+  }, [clientId, isSpotifyLibraryMode]);
+
+  contentModeRef.current = contentMode;
   hasMoreRef.current = contentMode === 'spotify-playlists' ? spotifyPlaylistsHasMore : hasMore;
   loadingMoreRef.current = loadingMore;
   offsetRef.current = offset;
@@ -456,6 +474,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
         setLoadingMore(true);
       }
       setError(null);
+      setErrorCode(null);
 
       try {
         const isSpotifyPlaylists = contentMode === 'spotify-playlists';
@@ -487,12 +506,11 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
         setSpotifyAuthed(true);
       } catch (err) {
         if (isInitial) {
-          const msg =
-            err?.code === 'SPOTIFY_NOT_AUTHED' && window.sonohaus?.isElectron
-              ? 'Tap Connect to sign in with Spotify.'
-              : err?.message ||
-                (contentMode === 'spotify-playlists' ? 'Failed to load Spotify playlists' : 'Failed to load Spotify albums');
-          setError(msg);
+          setError(spotifyErrorMessage(err, contentMode));
+          setErrorCode(err?.code || null);
+          if (err?.code === 'SPOTIFY_USER_NOT_REGISTERED') {
+            setShowSpotifySetup(true);
+          }
           setStatus('error');
         } else {
           console.error('[SpotifyAlbumRack] load more failed:', err);
@@ -524,6 +542,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
       }
       setSpotifyAuthed(true);
       setError(null);
+      setErrorCode(null);
       fetchNextPage({ reset: true });
     };
     window.addEventListener(SPOTIFY_AUTH_SUCCESS_EVENT, handler);
@@ -549,7 +568,8 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
 
     try {
       while (hasMoreRef.current) {
-        if (contentMode === 'spotify-playlists') {
+        const mode = contentModeRef.current;
+        if (mode === 'spotify-playlists') {
           const curOffset = spotifyPlaylistsOffsetRef.current;
           const res = await getMyPlaylistsPage({ limit: 50, offset: curOffset });
           const newOffset = res.offset + res.playlists.length;
@@ -563,7 +583,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
             artistName: p.ownerName ? `${p.ownerName}${p.trackCount != null ? ` · ${p.trackCount} tracks` : ''}` : '',
           }));
           setSpotifyPlaylists((prev) => [...prev, ...normalized]);
-        } else {
+        } else if (mode === 'albums') {
           const curOffset = offsetRef.current;
           const res = await getSavedAlbumsPage({ limit: 50, offset: curOffset });
           const newOffset = res.offset + res.albums.length;
@@ -573,6 +593,8 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
           setHasMore(!!res.hasMore);
           hasMoreRef.current = !!res.hasMore;
           setAlbums((prev) => [...prev, ...res.albums]);
+        } else {
+          break;
         }
       }
     } catch (err) {
@@ -714,19 +736,38 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
 
   const handleConnect = async () => {
     setError(null);
+    setErrorCode(null);
+    if (!clientId) {
+      setShowSpotifySetup(true);
+      setError('Paste your Spotify Client ID in Setup first, then tap Connect.');
+      setStatus('error');
+      return;
+    }
     try {
       await startSpotifyLogin({
         scopes: ['user-library-read', 'playlist-read-private', 'playlist-read-collaborative'],
       });
     } catch (err) {
       setError(err?.message || 'Spotify connection failed');
+      setErrorCode(err?.code || null);
       setStatus('error');
     }
+  };
+
+  const handleSaveClientId = () => {
+    const next = clientIdInput.trim();
+    if (!next) return;
+    clearStoredTokens();
+    setSpotifyClientId(next);
+    setShowSpotifySetup(false);
+    window.location.reload();
   };
 
   const handleDisconnect = () => {
     clearStoredTokens();
     setSpotifyAuthed(false);
+    setError(null);
+    setErrorCode(null);
     setAlbums([]);
     setSpotifyPlaylists([]);
     setTotal(null);
@@ -1051,30 +1092,39 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
               </div>
             ) : null}
             {contentMode === 'albums' || contentMode === 'spotify-playlists' ? (
-              spotifyAuthed ? (
+              <>
                 <button
                   type="button"
-                  className="cd-action cd-action-ghost cd-action-spotify-account"
-                  onClick={handleDisconnect}
-                  aria-label="Disconnect Spotify"
-                  title="Remove Spotify login from this browser"
-                >
-                  Disconnect
-                </button>
-              ) : clientId && canUseSpotify() ? (
-                <button type="button" className="cd-action" onClick={handleConnect} aria-label="Connect Spotify">
-                  Connect
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="cd-action"
+                  className={`cd-action cd-action-ghost ${showSpotifySetup ? 'active' : ''}`}
                   onClick={() => setShowSpotifySetup((v) => !v)}
-                  aria-label="Set up Spotify"
+                  aria-label="Spotify setup"
+                  aria-expanded={showSpotifySetup}
                 >
                   {showSpotifySetup ? 'Close' : 'Setup'}
                 </button>
-              )
+                {spotifyAuthed ? (
+                  <button
+                    type="button"
+                    className="cd-action cd-action-ghost cd-action-spotify-account"
+                    onClick={handleDisconnect}
+                    aria-label="Disconnect Spotify"
+                    title="Remove Spotify login from this device"
+                  >
+                    Disconnect
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="cd-action"
+                    onClick={handleConnect}
+                    aria-label="Connect Spotify"
+                    disabled={!clientId}
+                    title={clientId ? 'Sign in with Spotify' : 'Complete Setup first'}
+                  >
+                    Connect
+                  </button>
+                )}
+              </>
             ) : null}
           </div>
         </div>
@@ -1082,6 +1132,9 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
         {showSpotifySetup ? (
           <div className="cd-spotify-setup">
             <div className="cd-spotify-setup-steps">
+              <p>
+                Spotify library access requires a free developer app tied to <em>your</em> account (~2 min, one-time).
+              </p>
               <p>1. Go to developer.spotify.com/dashboard and create an app</p>
               <p>
                 2. Add this redirect URI to the Spotify app (must match exactly):{' '}
@@ -1093,11 +1146,11 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
               </p>
               {window.sonohaus?.isElectron ? (
                 <p className="cd-spotify-setup-note">
-                  The desktop app starts the Spotify helper on <code>127.0.0.1:38901</code> automatically. Add the URI
-                  above once in the Spotify dashboard (builds can ship with a Client ID so testers skip this screen).
+                  The desktop app runs a small helper on <code>127.0.0.1:38901</code> for sign-in. Add the redirect URI
+                  above in your Spotify app settings.
                 </p>
               ) : null}
-              <p>3. Copy your Client ID and paste it below</p>
+              <p>3. Copy your Client ID, paste it below, then tap Connect</p>
             </div>
             <div className="cd-spotify-setup-input">
               <input
@@ -1111,11 +1164,7 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
               <button
                 type="button"
                 className="cd-action"
-                onClick={() => {
-                  setSpotifyClientId(clientIdInput);
-                  setShowSpotifySetup(false);
-                  window.location.reload();
-                }}
+                onClick={handleSaveClientId}
                 disabled={!clientIdInput.trim()}
               >
                 Save
@@ -1164,7 +1213,18 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
             (contentMode === 'spotify-playlists' ? spotifyPlaylists.length : albums.length) === 0 ? (
             <div className="cd-empty">Connecting to your collection...</div>
           ) : error ? (
-            <div className="cd-empty">{error}</div>
+            <div className="cd-empty cd-empty-error">
+              <p>{error}</p>
+              {errorCode === 'SPOTIFY_USER_NOT_REGISTERED' || !clientId ? (
+                <button
+                  type="button"
+                  className="cd-action cd-spotify-error-action"
+                  onClick={() => setShowSpotifySetup(true)}
+                >
+                  Open Setup
+                </button>
+              ) : null}
+            </div>
             ) : (contentMode === 'albums' || contentMode === 'spotify-playlists') &&
               !spotifyAuthed &&
               (contentMode === 'spotify-playlists' ? spotifyPlaylists.length : albums.length) === 0 ? (
@@ -1189,6 +1249,11 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
               {contentMode === 'albums' && filtered.length === 0 && query.trim() && hasMore ? (
                 <div className="cd-search-pending">
                   No matches in loaded albums — scroll right to load more.
+                </div>
+              ) : null}
+              {contentMode === 'spotify-playlists' && filtered.length === 0 && query.trim() && spotifyPlaylistsHasMore ? (
+                <div className="cd-search-pending">
+                  No matches in loaded playlists — loading more from your library…
                 </div>
               ) : null}
               {isSpotifyLibraryMode && viewMode === 'carousel' ? (

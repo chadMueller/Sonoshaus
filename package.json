@@ -1,7 +1,7 @@
 {
   "name": "sonos-controller",
   "private": true,
-  "version": "0.7.2",
+  "version": "0.7.3",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -79,6 +79,11 @@
       ]
     },
     "mac": {
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "notarize": true,
       "icon": "build/icon.icns",
       "target": [
         {
