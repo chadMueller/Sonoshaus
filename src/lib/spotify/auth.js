@@ -272,6 +272,15 @@ async function refreshAccessToken(refreshToken) {
 
   if (!response.ok) {
     const text = await response.text();
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch {}
+    if (parsed?.error === 'invalid_grant') {
+      // Refresh token expired (Spotify enforces 6-month expiry). Discard and force re-auth.
+      clearStoredTokens();
+      const error = new Error('Spotify session expired. Please sign in again.');
+      error.code = 'SPOTIFY_REAUTH_REQUIRED';
+      throw error;
+    }
     throw new Error(`Spotify refresh failed (${response.status}): ${text}`);
   }
 
@@ -325,7 +334,14 @@ export async function getValidAccessToken() {
     return null;
   }
 
-  const refreshed = await refreshAccessToken(tokens.refresh_token);
-  return refreshed.access_token;
+  try {
+    const refreshed = await refreshAccessToken(tokens.refresh_token);
+    return refreshed.access_token;
+  } catch (err) {
+    if (err?.code === 'SPOTIFY_REAUTH_REQUIRED') {
+      return null;
+    }
+    throw err;
+  }
 }
 
