@@ -51,6 +51,12 @@ function clearPendingAuth() {
   try { fs.unlinkSync(PENDING_AUTH_FILE); } catch {}
 }
 
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 function spotifyTokenExchange(params) {
   return new Promise((resolve, reject) => {
     const body = new URLSearchParams(params).toString();
@@ -134,7 +140,7 @@ const server = http.createServer(async (req, res) => {
 
     if (error) {
       res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(`<html><body style="background:#0b0b0b;color:#e58d3d;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><h2>Spotify Auth Error</h2><p>${error}</p><p>You can close this tab and try again in Sonohaus.</p></div></body></html>`);
+      res.end(`<html><body style="background:#0b0b0b;color:#e58d3d;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><h2>Spotify Auth Error</h2><p>${escapeHtml(error)}</p><p>You can close this tab and try again in Sonohaus.</p></div></body></html>`);
       clearPendingAuth();
       return;
     }
@@ -178,7 +184,7 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       clearPendingAuth();
       res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(`<html><body style="background:#0b0b0b;color:#e58d3d;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><h2>Token Exchange Failed</h2><p>${err.message}</p><p>Try connecting again from Sonohaus.</p></div></body></html>`);
+      res.end(`<html><body style="background:#0b0b0b;color:#e58d3d;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><h2>Token Exchange Failed</h2><p>${escapeHtml(err.message)}</p><p>Try connecting again from Sonohaus.</p></div></body></html>`);
     }
     return;
   }
