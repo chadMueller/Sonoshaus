@@ -3,13 +3,13 @@
   "private": true,
   "version": "0.7.3",
   "type": "module",
-  "main": "electron/main.cjs",
+  "main": "main.cjs",
   "scripts": {
     "dev": "concurrently -k \"vite\" \"python3 https-proxy.py\"",
     "build": "vite build",
     "preview": "vite preview",
     "prepare-bridge": "bash scripts/prepare-bridge.sh",
-    "desktop:dev": "concurrently -k \"vite\" \"wait-on tcp:3000 && cross-env ELECTRON_START_URL=http://localhost:3000 electron electron/main.cjs\"",
+    "desktop:dev": "concurrently -k \"vite\" \"wait-on tcp:3000 && env -u ELECTRON_RUN_AS_NODE cross-env ELECTRON_START_URL=http://localhost:3000 electron .\"",
     "desktop:build": "npm run build && electron-builder"
   },
   "dependencies": {
@@ -40,6 +40,7 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "main.cjs",
       "package.json"
     ],
     "extraResources": [
@@ -50,6 +51,10 @@
       {
         "from": "scripts/bridge-watchdog.sh",
         "to": "bridge-installer/bridge-watchdog.sh"
+      },
+      {
+        "from": "scripts/patch-sonos-discovery.cjs",
+        "to": "bridge-installer/patch-sonos-discovery.cjs"
       },
       {
         "from": "scripts/token-server.cjs",

@@ -10,6 +10,7 @@ import { SpotifyAlbumRack } from './SpotifyAlbumRack.jsx';
 import { RackSlot } from './RackSlot.jsx';
 import { useSonos } from '../../hooks/useSonos.js';
 import { useReceiverRackOrder } from '../../hooks/useReceiverRackOrder.js';
+import { useElectronFullscreen } from '../../hooks/useElectronFullscreen.js';
 import { RACK_ARIA_NAMES } from '../../lib/receiverRackOrder.js';
 import { BridgeSetupWizard } from '../BridgeSetupWizard.jsx';
 import { isMockModeEnabled } from '../../api/sonos.js';
@@ -17,6 +18,7 @@ import { isMockModeEnabled } from '../../api/sonos.js';
 export function SonosReceiverView({ spotifyAuthError }) {
   const sonos = useSonos();
   const { order, moveRack, reorderUiVisible, toggleReorderUi } = useReceiverRackOrder();
+  const electronFullscreen = useElectronFullscreen();
   const isPlaying = sonos.playerState?.playbackState === 'PLAYING';
   const shuffleOn = sonos.playerState?.playMode?.shuffle === true;
   const repeatOn = !!sonos.playerState?.playMode?.repeat;
@@ -107,6 +109,26 @@ export function SonosReceiverView({ spotifyAuthError }) {
                       }}
                     />
                     <div className={`jewel-light ${sonos.bridgeReachable ? 'on' : 'off'}`} />
+                    {electronFullscreen.available ? (
+                      <button
+                        type="button"
+                        className={`receiver-fullscreen ${electronFullscreen.isFullscreen ? 'is-active' : ''}`}
+                        aria-pressed={electronFullscreen.isFullscreen}
+                        aria-label={
+                          electronFullscreen.isFullscreen
+                            ? 'Exit full screen'
+                            : 'Enter full screen'
+                        }
+                        title={
+                          electronFullscreen.isFullscreen
+                            ? 'Exit full screen (⌃⌘F)'
+                            : 'Enter full screen (⌃⌘F)'
+                        }
+                        onClick={electronFullscreen.toggle}
+                      >
+                        {electronFullscreen.isFullscreen ? 'Exit screen' : 'Full screen'}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="receiver-edit-order"
@@ -141,6 +163,7 @@ export function SonosReceiverView({ spotifyAuthError }) {
                   queueLoading={sonos.loading}
                   shuffleOn={shuffleOn}
                   onSeekToQueueIndex={sonos.skipToQueueIndex}
+                  onQueueOpen={sonos.refreshQueue}
                 />
               </section>
 
@@ -228,6 +251,7 @@ export function SonosReceiverView({ spotifyAuthError }) {
             loading={sonos.loading}
             selectedRoom={sonos.selectedRoom}
             onSeekToQueueIndex={sonos.skipToQueueIndex}
+            alignToNowKey={sonos.queueStartIndex}
           />
         );
       default:

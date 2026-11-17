@@ -21,6 +21,9 @@ echo "Installing bridge dependencies (production only)..."
 cd "$BRIDGE_DIR"
 npm install --production --no-optional
 
+# Renamed speakers must show up without a bridge restart
+node "$(dirname "$0")/patch-sonos-discovery.cjs" "$BRIDGE_DIR"
+
 # Remove git metadata and unnecessary files to slim down the bundle
 rm -rf .git .github .gitignore test tests docs *.md LICENSE CHANGELOG
 

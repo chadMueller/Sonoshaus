@@ -19,29 +19,49 @@ function sourceToItems(source) {
     .filter(Boolean);
 }
 
+function queueRowBadge(localIndex) {
+  if (localIndex === 0) return 'Now';
+  if (localIndex === 1) return 'Next';
+  return null;
+}
+
 export function MediaStack({
   queue,
   queueStartIndex = 0,
   loading,
   selectedRoom,
   onSeekToQueueIndex,
+  /** Bumps when the queue panel opens so we scroll to the current track. */
+  alignToNowKey,
 }) {
   const activeTab = 'queue';
 
   const queueItems = useMemo(() => sourceToItems(queue), [queue]);
   const listRef = useRef(null);
+
+  const startIndex = useMemo(() => {
+    const len = queueItems.length;
+    if (len === 0) return 0;
+    const raw = Number.isFinite(queueStartIndex) ? Math.floor(queueStartIndex) : 0;
+    return Math.min(Math.max(0, raw), len - 1);
+  }, [queueItems.length, queueStartIndex]);
+
+  /** Only show what's playing now and up next — hide already-played tracks. */
+  const visibleItems = useMemo(() => queueItems.slice(startIndex), [queueItems, startIndex]);
+
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
-    el.scrollTop = 0;
-  }, [queueStartIndex]);
+    el.scrollTo({ top: 0, behavior: 'auto' });
+  }, [alignToNowKey, startIndex]);
+
   const activeItems = useMemo(() => {
     switch (activeTab) {
       case 'queue':
       default:
-        return queueItems;
+        return visibleItems;
     }
-  }, [activeTab, queueItems]);
+  }, [activeTab, visibleItems]);
 
   const seekEnabled = typeof onSeekToQueueIndex === 'function' && !!selectedRoom;
 
@@ -50,7 +70,7 @@ export function MediaStack({
       <div className="stack-faceplate">
         <div className="stack-header">
           <div className="stack-title" aria-hidden="true" />
-          <h2 className="cd-title">Queue</h2>
+          <h2 className="cd-title">Now &amp; up next</h2>
         </div>
 
         <div className="stack-browser">
@@ -58,48 +78,58 @@ export function MediaStack({
             {activeTab === 'queue' ? (
               <>
                 <div className="stack-list" ref={listRef}>
-                {loading ? (
-                  <div className="stack-empty">Loading queue…</div>
-                ) : activeItems.length === 0 ? (
-                  <div className="stack-empty">No items found</div>
-                ) : (
-                  activeItems.map((item, index) => (
-                    <button
-                      key={`${activeTab}-${index}-${item.title}`}
-                      type="button"
-                      className="stack-item"
-                      title={item.subtitle ? `${item.subtitle} — ${item.title}` : item.title}
-                      disabled={!seekEnabled}
-                      aria-label={
-                        seekEnabled
-                          ? `Skip to ${item.title}${item.subtitle ? ` by ${item.subtitle}` : ''}`
-                          : undefined
-                      }
-                      onClick={() => {
-                        if (!seekEnabled) return;
-                        onSeekToQueueIndex(index);
-                      }}
-                    >
-                      <div className="stack-item-text">
-                        <div className="stack-item-title stack-item-title--single">
-                          {index === queueStartIndex ? (
-                            <span className="stack-item-now">Now</span>
-                          ) : null}
-                          {item.subtitle ? (
-                            <>
-                              <span className="stack-item-artist">{item.subtitle}</span>
-                              <span className="stack-item-sep" aria-hidden="true">
-                                {' '}
-                                —{' '}
-                              </span>
-                            </>
-                          ) : null}
-                          <span className="stack-item-track">{item.title}</span>
-                        </div>
-                      </div>
-                    </button>
-                  ))
-                )}
+                  {loading ? (
+                    <div className="stack-empty">Loading queue…</div>
+                  ) : activeItems.length === 0 ? (
+                    <div className="stack-empty">Nothing queued</div>
+                  ) : (
+                    activeItems.map((item, localIndex) => {
+                      const absoluteIndex = startIndex + localIndex;
+                      const badge = queueRowBadge(localIndex);
+                      return (
+                        <button
+                          key={`${activeTab}-${absoluteIndex}-${item.title}`}
+                          type="button"
+                          className={`stack-item${localIndex === 0 ? ' stack-item--now' : ''}`}
+                          title={item.subtitle ? `${item.subtitle} — ${item.title}` : item.title}
+                          disabled={!seekEnabled}
+                          aria-label={
+                            seekEnabled
+                              ? `Skip to ${item.title}${item.subtitle ? ` by ${item.subtitle}` : ''}`
+                              : undefined
+                          }
+                          onClick={() => {
+                            if (!seekEnabled) return;
+                            onSeekToQueueIndex(absoluteIndex);
+                          }}
+                        >
+                          <div className="stack-item-text">
+                            <div className="stack-item-title stack-item-title--single">
+                              {badge ? (
+                                <span
+                                  className={
+                                    localIndex === 0 ? 'stack-item-now' : 'stack-item-next'
+                                  }
+                                >
+                                  {badge}
+                                </span>
+                              ) : null}
+                              {item.subtitle ? (
+                                <>
+                                  <span className="stack-item-artist">{item.subtitle}</span>
+                                  <span className="stack-item-sep" aria-hidden="true">
+                                    {' '}
+                                    —{' '}
+                                  </span>
+                                </>
+                              ) : null}
+                              <span className="stack-item-track">{item.title}</span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               </>
             ) : null}

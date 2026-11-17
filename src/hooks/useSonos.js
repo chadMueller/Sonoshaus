@@ -202,23 +202,66 @@ export function useSonos() {
     return [];
   }, []);
 
-  const getQueueStartIndex = useCallback((state, normalizedQueue) => {
-    const q = Array.isArray(normalizedQueue) ? normalizedQueue : [];
-    if (q.length === 0) return 0;
-    const anyState = state && typeof state === 'object' ? state : null;
-
-    const qp = anyState && typeof anyState.queuePosition === 'number' ? anyState.queuePosition : null;
-    if (typeof qp === 'number' && Number.isFinite(qp) && qp >= 0 && qp < q.length) return Math.floor(qp);
-
-    const trackNo = anyState && typeof anyState.trackNo === 'number' ? anyState.trackNo : null;
-    // Some bridges report trackNo as 1-based queue index.
-    if (typeof trackNo === 'number' && Number.isFinite(trackNo)) {
-      const idx = Math.floor(trackNo - 1);
-      if (idx >= 0 && idx < q.length) return idx;
-    }
-
-    return 0;
+  const normalizeTrackKey = useCallback((track) => {
+    if (!track || typeof track !== 'object') return '';
+    const uri = track.uri || track.trackUri || track.enqueuedUri || track.resource;
+    if (typeof uri === 'string' && uri.trim()) return uri.trim().toLowerCase();
+    const title = typeof track.title === 'string' ? track.title.trim().toLowerCase() : '';
+    const artistRaw = track.artist ?? track.artistName;
+    const artist = typeof artistRaw === 'string' ? artistRaw.trim().toLowerCase() : '';
+    if (title && artist) return `${artist}|${title}`;
+    if (title) return title;
+    return '';
   }, []);
+
+  const findTrackInQueue = useCallback(
+    (track, normalizedQueue) => {
+      const q = Array.isArray(normalizedQueue) ? normalizedQueue : [];
+      const key = normalizeTrackKey(track);
+      if (!key || q.length === 0) return -1;
+
+      for (let i = 0; i < q.length; i += 1) {
+        const itemKey = normalizeTrackKey(q[i]);
+        if (!itemKey) continue;
+        if (itemKey === key) return i;
+        if (itemKey.includes(key) || key.includes(itemKey)) return i;
+      }
+      return -1;
+    },
+    [normalizeTrackKey],
+  );
+
+  const getQueueStartIndex = useCallback(
+    (state, normalizedQueue) => {
+      const q = Array.isArray(normalizedQueue) ? normalizedQueue : [];
+      if (q.length === 0) return 0;
+      const anyState = state && typeof state === 'object' ? state : null;
+      const currentKey = normalizeTrackKey(anyState?.currentTrack);
+
+      const byCurrent = findTrackInQueue(anyState?.currentTrack, q);
+      if (byCurrent >= 0) return byCurrent;
+
+      const qp = anyState && typeof anyState.queuePosition === 'number' ? anyState.queuePosition : null;
+      if (typeof qp === 'number' && Number.isFinite(qp)) {
+        const idx = Math.floor(qp);
+        if (idx >= 0 && idx < q.length) {
+          if (!currentKey || normalizeTrackKey(q[idx]) === currentKey) return idx;
+        }
+      }
+
+      const trackNo = anyState && typeof anyState.trackNo === 'number' ? anyState.trackNo : null;
+      // Some bridges report trackNo as 1-based queue index (others use album track number).
+      if (typeof trackNo === 'number' && Number.isFinite(trackNo)) {
+        const idx = Math.floor(trackNo - 1);
+        if (idx >= 0 && idx < q.length) {
+          if (!currentKey || normalizeTrackKey(q[idx]) === currentKey) return idx;
+        }
+      }
+
+      return 0;
+    },
+    [findTrackInQueue, normalizeTrackKey],
+  );
 
   // Refresh queue on demand (called after user actions + track changes)
   const refreshQueue = useCallback(async () => {
@@ -599,6 +642,7 @@ export function useSonos() {
     next,
     prev,
     skipToQueueIndex,
+    refreshQueue,
     toggleShuffle,
     toggleRepeat,
     refreshZones,

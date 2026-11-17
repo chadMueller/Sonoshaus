@@ -26,6 +26,12 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Trim pasted Client IDs; strip wrapping quotes from dashboard copy. */
+function normalizeSpotifyClientId(raw) {
+  if (raw == null) return '';
+  return String(raw).trim().replace(/^["']|["']$/g, '');
+}
+
 function spotifyErrorMessage(err, contentMode) {
   if (err?.code === 'SPOTIFY_USER_NOT_REGISTERED') {
     return err.message;
@@ -271,6 +277,8 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
   const [spotifyAuthed, setSpotifyAuthed] = useState(() => isSpotifyAuthed());
   const [showSpotifySetup, setShowSpotifySetup] = useState(() => !getSpotifyConfig().clientId);
   const [clientIdInput, setClientIdInput] = useState(() => getStoredClientId() || getSpotifyConfig().clientId);
+  const [clientIdPasteHint, setClientIdPasteHint] = useState(null);
+  const clientIdInputRef = useRef(null);
 
   useEffect(() => {
     if (!clientId && isSpotifyLibraryMode) {
@@ -754,8 +762,53 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
     }
   };
 
+  useEffect(() => {
+    if (!showSpotifySetup) return;
+    const id = window.setTimeout(() => {
+      const el = clientIdInputRef.current;
+      if (!el) return;
+      el.focus();
+      el.select();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [showSpotifySetup]);
+
+  const applyClientIdInput = useCallback((raw) => {
+    setClientIdInput(normalizeSpotifyClientId(raw));
+    setClientIdPasteHint(null);
+  }, []);
+
+  const handlePasteClientId = useCallback(async () => {
+    setClientIdPasteHint(null);
+    try {
+      const text = await navigator.clipboard.readText();
+      const next = normalizeSpotifyClientId(text);
+      if (!next) {
+        setClientIdPasteHint('Clipboard is empty. Copy your Client ID from the Spotify dashboard first.');
+        clientIdInputRef.current?.focus();
+        return;
+      }
+      applyClientIdInput(next);
+      clientIdInputRef.current?.focus();
+      clientIdInputRef.current?.select();
+    } catch {
+      setClientIdPasteHint('Use ⌘V to paste, or right‑click → Paste in the field below.');
+      clientIdInputRef.current?.focus();
+    }
+  }, [applyClientIdInput]);
+
+  const handleClientIdPaste = useCallback(
+    (event) => {
+      const pasted = event.clipboardData?.getData('text/plain');
+      if (pasted == null) return;
+      event.preventDefault();
+      applyClientIdInput(pasted);
+    },
+    [applyClientIdInput],
+  );
+
   const handleSaveClientId = () => {
-    const next = clientIdInput.trim();
+    const next = normalizeSpotifyClientId(clientIdInput);
     if (!next) return;
     clearStoredTokens();
     setSpotifyClientId(next);
@@ -1152,23 +1205,44 @@ export const SpotifyAlbumRack = React.memo(function SpotifyAlbumRack({
               ) : null}
               <p>3. Copy your Client ID, paste it below, then tap Connect</p>
             </div>
-            <div className="cd-spotify-setup-input">
-              <input
-                type="text"
-                className="cd-search-input"
-                value={clientIdInput}
-                onChange={(e) => setClientIdInput(e.target.value)}
-                placeholder="Paste Spotify Client ID..."
-                aria-label="Spotify Client ID"
-              />
-              <button
-                type="button"
-                className="cd-action"
-                onClick={handleSaveClientId}
-                disabled={!clientIdInput.trim()}
-              >
-                Save
-              </button>
+            <div className="cd-spotify-setup-field">
+              <label className="cd-spotify-setup-field-label" htmlFor="sonohaus-spotify-client-id">
+                Spotify Client ID
+              </label>
+              <div className="cd-spotify-setup-input">
+                <input
+                  id="sonohaus-spotify-client-id"
+                  ref={clientIdInputRef}
+                  type="text"
+                  className="cd-spotify-client-id-input"
+                  value={clientIdInput}
+                  onChange={(e) => applyClientIdInput(e.target.value)}
+                  onPaste={handleClientIdPaste}
+                  placeholder="Paste or type your Client ID"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  inputMode="text"
+                  aria-describedby={clientIdPasteHint ? 'sonohaus-spotify-client-id-hint' : undefined}
+                />
+                <button type="button" className="cd-action cd-action-ghost" onClick={handlePasteClientId}>
+                  Paste
+                </button>
+                <button
+                  type="button"
+                  className="cd-action"
+                  onClick={handleSaveClientId}
+                  disabled={!normalizeSpotifyClientId(clientIdInput)}
+                >
+                  Save
+                </button>
+              </div>
+              {clientIdPasteHint ? (
+                <p id="sonohaus-spotify-client-id-hint" className="cd-spotify-setup-paste-hint" role="status">
+                  {clientIdPasteHint}
+                </p>
+              ) : null}
             </div>
           </div>
         ) : null}

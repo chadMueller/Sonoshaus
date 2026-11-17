@@ -74,6 +74,17 @@ Open `http://localhost:3000`. Bridge must be running on `localhost:5005`.
 | `npm run build` | Production build to `dist/` |
 | `npm run desktop:build` | Build + package as macOS DMG |
 
+## Full screen (macOS app)
+
+Uses native **macOS Space fullscreen** — the app moves to its own desktop when you go full screen.
+
+- Click **Full screen** on the receiver faceplate (left of the brand), or
+- **View → Enter Full Screen**, or
+- **⌃⌘F** (Control–Command–F), or
+- The green window button
+
+Exit with the same controls, or swipe to your main desktop with a trackpad gesture.
+
 ## Kiosk mode
 
 For wall-mounted tablets or dedicated displays, add to `.env`:

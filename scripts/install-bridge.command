@@ -95,6 +95,10 @@ cd "$BRIDGE_DIR"
 "$NPM_BIN" install --production --no-optional 2>&1 | tail -3 | sed 's/^/  /'
 echo ""
 
+# --- Patch sonos-discovery so renamed speakers show up without a restart ---
+"$NODE_BIN" "${SCRIPT_DIR}/patch-sonos-discovery.cjs" "$BRIDGE_DIR" 2>&1 | sed 's/^/  /' || echo "  Warning: patch not applied (renamed speakers may need a bridge restart)."
+echo ""
+
 # --- Create LaunchAgent ---
 echo "  Setting up auto-start..."
 mkdir -p "$HOME/Library/LaunchAgents" "$LOG_DIR"

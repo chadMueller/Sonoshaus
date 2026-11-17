@@ -346,6 +346,34 @@
   gap: 12px;
 }
 
+.receiver-fullscreen {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 5px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--alum-dark);
+  color: var(--text-engraved);
+  background: linear-gradient(to bottom, #ede5de, #cbbdae);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 1px 2px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.receiver-fullscreen:hover {
+  color: #2f2a25;
+}
+
+.receiver-fullscreen.is-active,
+.receiver-fullscreen[aria-pressed='true'] {
+  color: #fff;
+  background: linear-gradient(to bottom, #6f6255, #3f352e);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
 .receiver-edit-order {
   display: none;
 }
@@ -1673,7 +1701,8 @@
   text-overflow: ellipsis;
 }
 
-.stack-item-now {
+.stack-item-now,
+.stack-item-next {
   display: inline-block;
   margin-right: 8px;
   padding: 2px 6px;
@@ -1682,11 +1711,24 @@
   font-size: 9px;
   letter-spacing: 0.7px;
   text-transform: uppercase;
+  vertical-align: 1px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.stack-item-now {
   color: rgba(229, 141, 61, 0.92);
   border: 1px solid rgba(229, 141, 61, 0.35);
   background: rgba(15, 14, 13, 0.55);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  vertical-align: 1px;
+}
+
+.stack-item-next {
+  color: rgba(245, 239, 235, 0.75);
+  border: 1px solid rgba(245, 239, 235, 0.22);
+  background: rgba(15, 14, 13, 0.4);
+}
+
+.stack-item--now {
+  border-color: rgba(229, 141, 61, 0.45);
 }
 
 .stack-item-artist,
@@ -2162,14 +2204,64 @@
   user-select: all;
 }
 
+.cd-spotify-setup-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cd-spotify-setup-field-label {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #1a1a1a;
+}
+
 .cd-spotify-setup-input {
   display: flex;
   gap: 8px;
-  align-items: center;
+  align-items: stretch;
 }
 
-.cd-spotify-setup-input .cd-search-input {
+.cd-spotify-client-id-input {
   flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid #6b6b6b;
+  border-radius: 4px;
+  background: #fff;
+  color: #111;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.cd-spotify-client-id-input:focus {
+  border-color: #2563eb;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.08),
+    0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+
+.cd-spotify-client-id-input::placeholder {
+  color: #6b7280;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+}
+
+.cd-spotify-setup-paste-hint {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #7c2d12;
 }
 
 .cd-empty-error {
